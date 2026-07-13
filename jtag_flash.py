@@ -26,6 +26,7 @@ KNOWN_TAPS = {
     0x04721093: "Xilinx Zynq UltraScale+ ZU4/ZU5/ZU7"
 }
 
+
 class JtagController:
     """Class to encapsulate and manage the JTAG interface via FTDI MPSSE."""
     
@@ -35,10 +36,17 @@ class JtagController:
     @staticmethod
     def list_ftdi_devices():
         print("Scan for FTDI devices in progress...")
-        devices = ftd.listDevices()
+        try:
+            # Added safety try-catch for D2XX driver issues
+            devices = ftd.listDevices()
+        except Exception as e:
+            print(f"Error communicating with FTDI driver: {e}")
+            return
+
         if devices is None:
             print("No FTDI devices detected.")
             return
+            
         print(f"Found {len(devices)} FTDI endpoints:")
         for i, dev in enumerate(devices):
             dev_name = dev.decode('utf-8', errors='ignore')
@@ -54,10 +62,30 @@ class JtagController:
         except ftd.DeviceError:
             return False
 
-    def open(self, device_index=0):
+    # --- JTAG STATE MACHINE ABSTRACTIONS ---
+
+    def _tms_reset(self):
+        """Returns MPSSE command to reset the TAP controller (Test-Logic-Reset)."""
+        # Send 32 clocks with TMS=1 to force reset state
+        return b'\x4B\x07\xFF' * 4
+
+    def _tms_to_shift_dr(self):
+        """Returns MPSSE command to move from Test-Logic-Reset to Shift-DR."""
+        # TMS sequence: 0, 1, 0, 0
+        return b'\x4B\x03\x02'
+
+    def _tms_to_idle(self):
+        """Returns MPSSE command to move from Shift-xR to Run-Test/Idle."""
+        # TMS sequence: 1, 1, 0
+        return b'\x4B\x02\x03'
+
+    # ---------------------------------------
+
+    def open(self, device_index=0, freq_hz=1_000_000):
         if self.is_ready():
             print("JTAG is already open.")
             return
+            
         print("Initializing JTAG...")
         try:
             self.device = ftd.open(device_index)
@@ -65,6 +93,7 @@ class JtagController:
             time.sleep(0.05)
             self.device.setBitMode(0x0B, 2)
             time.sleep(0.05)
+            
             self.device.setUSBParameters(4096, 4096)
             self.device.setChars(0, False, 0, False)
             self.device.setTimeouts(1000, 1000)
@@ -72,11 +101,21 @@ class JtagController:
             self.device.purge(ftd.defines.PURGE_RX | ftd.defines.PURGE_TX)
             
             setup_cmds = bytearray()
-            setup_cmds += b'\x8A\x97\x8D'
+            setup_cmds += b'\x8A\x97\x8D' # Disable advanced clock options
+            
+            # HARDWARE KEY FOR CUSTOM BOARD
             setup_cmds += b'\x80\x88\xFB' 
+            # Set ACBUS to High-Z for safety
             setup_cmds += b'\x82\x00\x00'
+
+            # Set JTAG Clock (Base clock is 60MHz. TCK = 60MHz / ((1 + divisor) * 2))
+            # Moving clock configuration here and calculating divisor dynamically
+            divisor = int((30_000_000 / freq_hz) - 1)
+            divisor = max(0, min(65535, divisor)) # Clamp between 0x0000 and 0xFFFF
+            setup_cmds += struct.pack('<BH', 0x86, divisor)
+            
             self.device.write(bytes(setup_cmds))
-            print("FTDI connection opened.")
+            print(f"FTDI connection opened. TCK set to ~{freq_hz/1e6:.1f} MHz.")
         except Exception as e:
             print(f"Error initializing FTDI: {e}")
             self.device = None
@@ -105,12 +144,12 @@ class JtagController:
 
         try:
             print("Scanning JTAG chain (Blind Scan)...")
-            self.device.write(b'\x86\x1D\x00') 
             self.device.purge(ftd.defines.PURGE_RX)
             
+            # Using the abstracted TAP methods to build the payload
             mpsse_payload = bytearray()
-            mpsse_payload += b'\x4B\x07\xFF' * 4  
-            mpsse_payload += b'\x4B\x03\x02'      
+            mpsse_payload += self._tms_reset()
+            mpsse_payload += self._tms_to_shift_dr()
             
             # Read 'max_devices' * 4 bytes (e.g., 8 devices = 32 bytes)
             bytes_to_read = max_devices * 4
@@ -118,7 +157,7 @@ class JtagController:
             length_val = bytes_to_read - 1
             mpsse_payload += b'\x28' + struct.pack('<H', length_val)
             
-            mpsse_payload += b'\x4B\x02\x03'      
+            mpsse_payload += self._tms_to_idle()
             mpsse_payload += b'\x87'              
             
             self.device.write(bytes(mpsse_payload))
@@ -133,25 +172,24 @@ class JtagController:
                 
                 tap_count = 0
                 for i in range(max_devices):
-                    # Extract 4 bytes (32 bits) at a time
                     chunk = rx_data[i*4 : (i+1)*4]
                     idcode = struct.unpack('<I', chunk)[0]
                     
-                    # 0xFFFFFFFF means the chain is empty (TDO pull-up)
                     if idcode == 0xFFFFFFFF:
                         break
                     
-                    # Check if bit 0 is 1 (Standard IDCODE validation)
                     if (idcode & 0x01) == 0:
-                        print(f"{i:<5} | 0x{idcode:08X} | Warning: Non-IDCODE / Bypass bit detected")
+                        # Fallback for bypassed TAPs (Using 'tap_count + 1' for visual alignment)
+                        print(f"{i + 1:<5} | 0x{idcode:08X} | Warning: Non-IDCODE / Bypass bit detected")
                         continue
                     
+                    # Valid TAP found, increment counter
                     tap_count += 1
                         
-                    # Mask out the Revision (top 4 bits) for generic lookup
                     masked_id = idcode & 0x0FFFFFFF
                     device_name = KNOWN_TAPS.get(masked_id, "Unknown Device")
                     
+                    # Print using the real tap_count for perfect visual alignment
                     print(f"{i:<5} | 0x{idcode:08X} | {device_name}")
                     
                 print("-" * 80)
@@ -204,7 +242,6 @@ def main_loop(jtag):
     return True
 
 if __name__ == '__main__':
-    # Instantiate our JTAG controller
     jtag = JtagController()
     
     show_menu()
@@ -212,4 +249,4 @@ if __name__ == '__main__':
         pass
 
     print("Exiting...")
-    jtag.close() # Safety close on exit
+    jtag.close()
