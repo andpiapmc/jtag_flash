@@ -222,7 +222,7 @@ class JtagController:
 
     def read_fpga_usercode(self):
         """
-        Demonstrates targeting a specific TAP.
+        Demonstrates targeting a specific TAP using the dynamic shift engine.
         Reads the USERCODE (Instruction 0x08) of the Zynq PL (FPGA),
         while putting the ARM DAP in BYPASS (Instruction 0x0F).
         """
@@ -230,67 +230,34 @@ class JtagController:
             print("JTAG device not initialized.")
             return
 
-        print("Targeting FPGA TAP -> Reading USERCODE...")
+        print("\nTargeting FPGA TAP -> Reading USERCODE...")
         try:
             self.device.purge(ftd.defines.PURGE_RX)
-            payload = bytearray()
             
             # 1. Reset state machine and go to Idle
-            payload += self._tms_reset()
-            payload += self._tms_tlr_to_idle()
+            self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
             
             # ==========================================
             # STEP 1: SHIFT INSTRUCTION (IR)
             # ==========================================
-            payload += self._tms_idle_to_shift_ir()
-            
-            # The chain is TDI -> ARM DAP (4 bits) -> FPGA PL (6 bits) -> TDO.
-            # To talk to FPGA, we shift 10 bits total. 
-            # The first 6 bits will push through the ARM and land in the FPGA.
-            # FPGA USERCODE IR = 0x08 (001000). ARM BYPASS = 0x0F (1111).
-            # Sequence (LSB first): 0,0,0,1,0,0 (FPGA) + 1,1,1,1 (ARM)
-            # Binary string: 1111 001000 -> LSB first means we shift '000100 1111'
-            # Byte 0: 1110 1000 (0xE8) -> 8 bits
-            # Byte 1: 0000 0011 (0x03) -> 2 bits
-            
-            # Send first 8 bits (Command 0x19: clock bytes out, -ve edge, LSB first)
-            payload += b'\x19\x00\x00\xE8'
-            
-            # Send last 2 bits. CRITICAL: The very last bit must be clocked with TMS=1 
-            # to exit Shift-IR. So we send 1 bit normally, and the 10th bit via TMS command.
-            
-            # 9th bit (a '1') with TMS=0 (Command 0x1B: clock bits out)
-            payload += b'\x1B\x00\x01' 
-            # 10th bit (a '1') with TMS=1 (Command 0x4B: clock bit to TMS)
-            # 0x83 = 10000011 -> Bit 0 is Data(1), Bit 1 is TMS(1)
-            payload += b'\x4B\x00\x83'
-            
-            # Return to Idle from Exit1-IR
-            payload += self._tms_to_idle()
+            # Target FPGA (Index 0) with Instruction 0x08
+            self.shift_ir(0x08, tap_index=0)
             
             # ==========================================
             # STEP 2: SHIFT DATA (DR)
             # ==========================================
+            # Since ARM is in BYPASS (1 bit) and FPGA USERCODE is 32 bits,
+            # we read the first 32 bits closest to TDO (which belong to the FPGA).
+            payload = bytearray()
             payload += self._tms_idle_to_shift_dr()
-            
-            # Because ARM is in BYPASS, its Data Register is exactly 1 bit long.
-            # FPGA USERCODE register is 32 bits long. Total chain DR length = 33 bits.
-            # We want to read the 32 bits of the FPGA, which are closest to TDO.
-            # So we read 32 bits (4 bytes).
             payload += b'\x28\x03\x00' # Read 4 bytes (0x03 = length-1)
-            
-            # Exit Shift-DR and go to Idle
-            # We don't care about shifting data into TDI here, just moving TMS.
-            payload += b'\x4B\x00\x03' # 1 clock, TMS=1 (Exit1-DR)
+            payload += b'\x4B\x00\x03' # Exit1-DR (1 clock with TMS=1)
             payload += self._tms_to_idle()
-            
-            # Flush
-            payload += b'\x87'
+            payload += b'\x87'         # Flush
             
             self.device.write(bytes(payload))
             time.sleep(0.01)
             
-            # Read the 4 bytes back
             rx_data = self.device.read(4)
             if len(rx_data) == 4:
                 usercode = struct.unpack('<I', rx_data)[0]
@@ -300,7 +267,71 @@ class JtagController:
                 
         except Exception as e:
             print(f"Error during IR/DR operations: {e}")
+
+    # --- DYNAMIC SHIFT ENGINE ---
+
+    def shift_ir(self, instruction, tap_index):
+        """
+        Sends an instruction to a specific TAP, putting others in BYPASS (all 1s).
+        - tap_index 0 = FPGA (PL) [IR = 6 bit]
+        - tap_index 1 = ARM (PS)  [IR = 4 bit]
+        """
+        # Zynq 7000 Chain: TDI -> ARM (4 bit) -> FPGA (6 bit) -> TDO
+        
+        if tap_index == 1: # Target ARM
+            # Send 6 bits of BYPASS for FPGA, then the ARM IR
+            total_bits = 6 + 4
+            shift_value = (instruction << 6) | 0x3F
+        elif tap_index == 0: # Target FPGA
+            # Send ARM BYPASS, then the FPGA IR
+            total_bits = 6 + 4
+            shift_value = (0x0F << 6) | instruction
+        else:
+            raise ValueError("Invalid TAP index.")
+
+        self._shift_bits(shift_value, total_bits, is_ir=True)
+
+    def _shift_bits(self, data_val, num_bits, is_ir=False):
+        """
+        Low-level MPSSE engine. Calculates exact bytes and remaining bits
+        to shift into the TAP state machine.
+        """
+        payload = bytearray()
+        
+        # Navigate to Shift-IR or Shift-DR
+        payload += self._tms_idle_to_shift_ir() if is_ir else self._tms_idle_to_shift_dr()
             
+        # Calculate full bytes and remaining bits
+        num_bytes = (num_bits - 1) // 8
+        remaining_bits = (num_bits - 1) % 8
+        
+        # Extract the very last bit (must be sent with TMS=1 to exit shift state)
+        last_bit = (data_val >> (num_bits - 1)) & 0x01
+        
+        # 1. Send full bytes (if any)
+        if num_bytes > 0:
+            # Command 0x19: Clock Data Bytes Out on -ve edge, LSB first
+            payload += b'\x19' + struct.pack('<H', num_bytes - 1)
+            byte_mask = (1 << (num_bytes * 8)) - 1
+            payload += (data_val & byte_mask).to_bytes(num_bytes, byteorder='little')
+            
+        # 2. Send remaining bits (excluding the final bit)
+        if remaining_bits > 0:
+            # Command 0x1B: Clock Data Bits Out on -ve edge, LSB first
+            payload += b'\x1B' + struct.pack('<B', remaining_bits - 1)
+            bit_data = (data_val >> (num_bytes * 8)) & 0xFF
+            payload += struct.pack('<B', bit_data)
+            
+        # 3. Send the final bit with TMS=1 (Exit1-xR)
+        # Command 0x4B: Clock Data to TMS pin (Bit 0 = TDI, Bit 1 = TMS)
+        tms_byte = 0x82 | last_bit
+        payload += b'\x4B\x00' + struct.pack('<B', tms_byte)
+        
+        # Return to Run-Test/Idle
+        payload += self._tms_to_idle()
+        
+        self.device.write(bytes(payload))
+
 
 # --- CLI INTERFACE ---
 
