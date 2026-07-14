@@ -79,8 +79,14 @@ class JtagController:
 
     def _tms_to_idle(self):
         """Returns MPSSE command to move from Shift-xR to Run-Test/Idle."""
-        # TMS sequence: 1, 1, 0
+        # TMS sequence: 1, 1, 0 (3 clocks)
         return b'\x4B\x02\x03'
+        
+    def _tms_exit_to_idle(self):
+        """Returns MPSSE command to move from Exit1-xR to Run-Test/Idle."""
+        # TMS sequence: 1 (Update-xR), 0 (Run-Test/Idle)
+        # LSB first = 0x01 (2 clocks)
+        return b'\x4B\x01\x01'
     
     def _tms_tlr_to_idle(self):
         """Returns MPSSE command to move from Test-Logic-Reset to Run-Test/Idle."""
@@ -128,7 +134,6 @@ class JtagController:
             setup_cmds += b'\x82\x00\x00'   # Set ACBUS to High-Z for safety
 
             # Set JTAG Clock (Base clock is 60MHz. TCK = 60MHz / ((1 + divisor) * 2))
-            # Moving clock configuration here and calculating divisor dynamically
             divisor = int((30_000_000 / freq_hz) - 1)
             divisor = max(0, min(65535, divisor)) # Clamp between 0x0000 and 0xFFFF
             setup_cmds += struct.pack('<BH', 0x86, divisor)
@@ -199,17 +204,14 @@ class JtagController:
                         break
                     
                     if (idcode & 0x01) == 0:
-                        # Fallback for bypassed TAPs (Using 'tap_count + 1' for visual alignment)
                         print(f"{i + 1:<5} | 0x{idcode:08X} | Warning: Non-IDCODE / Bypass bit detected")
                         continue
                     
-                    # Valid TAP found, increment counter
                     tap_count += 1
                         
                     masked_id = idcode & 0x0FFFFFFF
                     device_name = KNOWN_TAPS.get(masked_id, "Unknown Device")
                     
-                    # Print using the real tap_count for perfect visual alignment
                     print(f"{i:<5} | 0x{idcode:08X} | {device_name}")
                     
                 print("-" * 80)
@@ -222,68 +224,44 @@ class JtagController:
 
     def read_fpga_usercode(self):
         """
-        Demonstrates targeting a specific TAP using the dynamic shift engine.
         Reads the USERCODE (Instruction 0x08) of the Zynq PL (FPGA),
-        while putting the ARM DAP in BYPASS (Instruction 0x0F).
+        utilizing the new dynamic Full-Duplex shift engine.
         """
         if not self.is_ready():
             print("JTAG device not initialized.")
             return
 
-        print("\nTargeting FPGA TAP -> Reading USERCODE...")
+        print("Targeting FPGA TAP -> Reading USERCODE...")
         try:
             self.device.purge(ftd.defines.PURGE_RX)
             
-            # 1. Reset state machine and go to Idle
+            # Reset state machine and go to Idle
             self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
             
-            # ==========================================
-            # STEP 1: SHIFT INSTRUCTION (IR)
-            # ==========================================
-            # Target FPGA (Index 0) with Instruction 0x08
+            # Step 1: Target FPGA (Index 0) with Instruction 0x08
             self.shift_ir(0x08, tap_index=0)
             
-            # ==========================================
-            # STEP 2: SHIFT DATA (DR)
-            # ==========================================
-            # Since ARM is in BYPASS (1 bit) and FPGA USERCODE is 32 bits,
-            # we read the first 32 bits closest to TDO (which belong to the FPGA).
-            payload = bytearray()
-            payload += self._tms_idle_to_shift_dr()
-            payload += b'\x28\x03\x00' # Read 4 bytes (0x03 = length-1)
-            payload += b'\x4B\x00\x03' # Exit1-DR (1 clock with TMS=1)
-            payload += self._tms_to_idle()
-            payload += b'\x87'         # Flush
+            # Step 2: Read 32 bits from the FPGA Data Register
+            usercode = self.shift_dr(0x00000000, dr_len=32, tap_index=0)
             
-            self.device.write(bytes(payload))
-            time.sleep(0.01)
-            
-            rx_data = self.device.read(4)
-            if len(rx_data) == 4:
-                usercode = struct.unpack('<I', rx_data)[0]
-                print(f"FPGA USERCODE: 0x{usercode:08X}")
-            else:
-                print("Failed to read USERCODE.")
+            print(f"FPGA USERCODE: 0x{usercode:08X}")
                 
         except Exception as e:
             print(f"Error during IR/DR operations: {e}")
 
-    # --- DYNAMIC SHIFT ENGINE ---
+    # --- DYNAMIC SHIFT ENGINE (FULL DUPLEX) ---
 
     def shift_ir(self, instruction, tap_index):
         """
-        Sends an instruction to a specific TAP, putting others in BYPASS (all 1s).
+        Shifts the instruction into the target TAP while putting the other in BYPASS.
         - tap_index 0 = FPGA (PL) [IR = 6 bit]
         - tap_index 1 = ARM (PS)  [IR = 4 bit]
         """
         # Zynq 7000 Chain: TDI -> ARM (4 bit) -> FPGA (6 bit) -> TDO
-        
         if tap_index == 1: # Target ARM
-            # Send 6 bits of BYPASS for FPGA, then the ARM IR
             total_bits = 6 + 4
             shift_value = (instruction << 6) | 0x3F
         elif tap_index == 0: # Target FPGA
-            # Send ARM BYPASS, then the FPGA IR
             total_bits = 6 + 4
             shift_value = (0x0F << 6) | instruction
         else:
@@ -291,46 +269,141 @@ class JtagController:
 
         self._shift_bits(shift_value, total_bits, is_ir=True)
 
+    def shift_dr(self, data_val, dr_len, tap_index):
+        """
+        Shifts data into the target TAP DR and reads the response.
+        Dynamically compensates for the bypass bit of the ignored TAP.
+        """
+        if tap_index == 1: # Target ARM
+            # Chain: TDI -> ARM (dr_len bits) -> FPGA BYPASS (1 bit) -> TDO
+            total_bits = dr_len + 1
+            # The first bit pushed in ends up in FPGA, followed by ARM data
+            shift_value = (data_val << 1) | 0x01
+        elif tap_index == 0: # Target FPGA
+            # Chain: TDI -> ARM BYPASS (1 bit) -> FPGA (dr_len bits) -> TDO
+            total_bits = dr_len + 1
+            shift_value = (0x01 << dr_len) | data_val
+        else:
+            raise ValueError("Invalid TAP index.")
+
+        rx_val = self._shift_bits(shift_value, total_bits, is_ir=False)
+        
+        # FPGA is closest to TDO, so its data (or bypass bit) comes out first
+        if tap_index == 1:
+            # ARM is targeted. FPGA bypass bit is at bit 0. ARM data is shifted left by 1.
+            return (rx_val >> 1) & ((1 << dr_len) - 1)
+        else:
+            # FPGA is targeted. FPGA data is at bits 0 to (dr_len - 1).
+            return rx_val & ((1 << dr_len) - 1)
+
     def _shift_bits(self, data_val, num_bits, is_ir=False):
         """
-        Low-level MPSSE engine. Calculates exact bytes and remaining bits
-        to shift into the TAP state machine.
+        Full-Duplex MPSSE engine. Writes and reads bits simultaneously.
+        Returns the numeric value read from the TDO pin.
         """
         payload = bytearray()
-        
-        # Navigate to Shift-IR or Shift-DR
         payload += self._tms_idle_to_shift_ir() if is_ir else self._tms_idle_to_shift_dr()
             
-        # Calculate full bytes and remaining bits
         num_bytes = (num_bits - 1) // 8
         remaining_bits = (num_bits - 1) % 8
-        
-        # Extract the very last bit (must be sent with TMS=1 to exit shift state)
         last_bit = (data_val >> (num_bits - 1)) & 0x01
         
-        # 1. Send full bytes (if any)
+        # 1. Full bytes (Command 0x39: Clock Data Bytes In & Out, LSB first)
         if num_bytes > 0:
-            # Command 0x19: Clock Data Bytes Out on -ve edge, LSB first
-            payload += b'\x19' + struct.pack('<H', num_bytes - 1)
+            payload += b'\x39' + struct.pack('<H', num_bytes - 1)
             byte_mask = (1 << (num_bytes * 8)) - 1
             payload += (data_val & byte_mask).to_bytes(num_bytes, byteorder='little')
             
-        # 2. Send remaining bits (excluding the final bit)
+        # 2. Remaining bits (Command 0x3B: Clock Data Bits In & Out, LSB first)
         if remaining_bits > 0:
-            # Command 0x1B: Clock Data Bits Out on -ve edge, LSB first
-            payload += b'\x1B' + struct.pack('<B', remaining_bits - 1)
+            payload += b'\x3B' + struct.pack('<B', remaining_bits - 1)
             bit_data = (data_val >> (num_bytes * 8)) & 0xFF
             payload += struct.pack('<B', bit_data)
             
-        # 3. Send the final bit with TMS=1 (Exit1-xR)
-        # Command 0x4B: Clock Data to TMS pin (Bit 0 = TDI, Bit 1 = TMS)
-        tms_byte = 0x82 | last_bit
-        payload += b'\x4B\x00' + struct.pack('<B', tms_byte)
+        # 3. Last bit with TMS=1 (Command 0x6B: Clock Data to TMS with Read)
+        # Bit 0 = TMS (forced to 1 to exit Shift state)
+        # Bit 7 = TDI (our last data bit)
+        tms_byte = 0x01 | (last_bit << 7)
+        payload += b'\x6B\x00' + struct.pack('<B', tms_byte)
         
-        # Return to Run-Test/Idle
-        payload += self._tms_to_idle()
+        # Go back to Run-Test/Idle using the correct 2-clock exit sequence
+        payload += self._tms_exit_to_idle()
+        payload += b'\x87' # Flush
         
         self.device.write(bytes(payload))
+        
+        # --- READ PHASE ---
+        expected_rx_len = num_bytes + (1 if remaining_bits > 0 else 0) + 1
+        rx_data = self.device.read(expected_rx_len)
+        
+        rx_val = 0
+        if len(rx_data) == expected_rx_len:
+            idx = 0
+            if num_bytes > 0:
+                rx_val = int.from_bytes(rx_data[0:num_bytes], byteorder='little')
+                idx += num_bytes
+            if remaining_bits > 0:
+                extra_bits = rx_data[idx] >> (8 - remaining_bits)
+                rx_val |= (extra_bits << (num_bytes * 8))
+                idx += 1
+            last_rx_bit = (rx_data[idx] >> 7) & 0x01
+            rx_val |= (last_rx_bit << (num_bits - 1))
+            
+        return rx_val
+
+    # ==========================================
+    # TEST ARM CORESIGHT DAP
+    # ==========================================
+    def test_arm_dap(self):
+        """Interrogates and initializes the ARM Debug Port (CoreSight JTAG-DP)."""
+        if not self.is_ready():
+            return
+
+        print("Targeting ARM DAP -> CoreSight Initialization Sequence...")
+        self.device.purge(ftd.defines.PURGE_RX)
+        
+        # Ensure we start from Idle state
+        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+
+        # ==========================================
+        # STEP 1: Direct ARM IDCODE
+        # ==========================================
+        self.shift_ir(0x0E, tap_index=1)
+        rx_idcode = self.shift_dr(0x00000000, dr_len=32, tap_index=1)
+        print(f"ARM IDCODE     : 0x{rx_idcode:08X} (Expected: 0x4BA00477)")
+
+        # ==========================================
+        # STEP 2: DAP Initialization Sequence
+        # ==========================================
+        self.shift_ir(0x0A, tap_index=1) # Select DPACC (Debug Port Access)
+
+        # In JTAG-DP, the response to a command arrives in the NEXT transaction.
+        # We queue commands in a pipeline.
+
+        # TX 1: Write ABORT (Addr 0) to clear any sticky errors left by the reset
+        # RnW=0 (Write), A[3:2]=0, Data=0x1E
+        req_abort = (0x0000001E << 3) | (0 << 1) | 0
+        self.shift_dr(req_abort, dr_len=35, tap_index=1)
+
+        # TX 2: Write CTRL/STAT (Addr 4) to request Power Up
+        # RnW=0 (Write), A[3:2]=1, Data=0x50000000 (CSYSPWRUPREQ | CDBGPWRUPREQ)
+        req_powerup = (0x50000000 << 3) | (1 << 1) | 0
+        rx_val = self.shift_dr(req_powerup, dr_len=35, tap_index=1)
+        print(f"ABORT ACK      : 0x{rx_val & 0x7:02X} (Expected: 0x02 = OK)")
+
+        # TX 3: Read CTRL/STAT (Addr 4) to verify power status
+        # RnW=1 (Read), A[3:2]=1, Data=0
+        req_read_ctrl = (0x00000000 << 3) | (1 << 1) | 1
+        rx_val = self.shift_dr(req_read_ctrl, dr_len=35, tap_index=1)
+        print(f"PWRUP ACK      : 0x{rx_val & 0x7:02X} (Expected: 0x02 = OK)")
+
+        # TX 4: Dummy Read to clock out the DATA result of TX 3
+        rx_val = self.shift_dr(req_read_ctrl, dr_len=35, tap_index=1)
+        ack = rx_val & 0x07
+        ctrl_stat = (rx_val >> 3) & 0xFFFFFFFF
+        
+        print(f"CTRL/STAT ACK  : 0x{ack:02X} (Expected: 0x02 = OK)")
+        print(f"CTRL/STAT DATA : 0x{ctrl_stat:08X} (Expected to start with 0xF... meaning Powered Up!)")
 
 
 # --- CLI INTERFACE ---
@@ -342,6 +415,7 @@ menu_list = [
     "3. Close JTAG",
     "4. Scan JTAG",
     "5. Read FPGA USERCODE",
+    "6. Test ARM DAP",
     "?. Help"
 ]
 
@@ -369,12 +443,15 @@ def main_loop(jtag):
             jtag.scan()
         case "5":
             jtag.read_fpga_usercode()
+        case "6":
+            jtag.test_arm_dap()
         case "?":
             show_menu()
         case _:
             pass
 
     return True
+
 
 if __name__ == '__main__':
     jtag = JtagController()
@@ -385,3 +462,5 @@ if __name__ == '__main__':
 
     print("Exiting...")
     jtag.close()
+
+    
