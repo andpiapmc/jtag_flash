@@ -36,24 +36,28 @@ class JtagController:
 
     @staticmethod
     def list_ftdi_devices():
-        """Lists all connected FTDI devices."""
-
-        print("Scan for FTDI devices in progress...")
+        """Lists all connected FTDI devices with rich details."""
+        print("Scanning for FTDI devices...")
         try:
-            # Added safety try-catch for D2XX driver issues
-            devices = ftd.listDevices()
-        except Exception as e:
-            print(f"Error communicating with FTDI driver: {e}")
-            return
-
-        if devices is None:
-            print("No FTDI devices detected.")
-            return
+            # Use createDeviceInfoList to populate the internal driver list
+            num_devices = ftd.createDeviceInfoList()
+            if num_devices == 0:
+                print("No FTDI devices detected.")
+                return
             
-        print(f"Found {len(devices)} FTDI endpoints:")
-        for i, dev in enumerate(devices):
-            dev_name = dev.decode('utf-8', errors='ignore')
-            print(f"Index {i}: {dev_name}")
+            print(f"Found {num_devices} FTDI endpoint(s):")
+            for i in range(num_devices):
+                detail = ftd.getDeviceInfoDetail(i)
+                # In the ftd2xx Python wrapper, 'detail' is a dictionary
+                desc = detail.get('description', b'Unknown').decode('utf-8', errors='ignore')
+                serial = detail.get('serial', b'Unknown').decode('utf-8', errors='ignore')
+                
+                print(f"  Index {i}: {desc} (Serial: {serial})")
+
+        except Exception as e:
+            # Added type(e).__name__ to avoid masking Python exceptions in the future
+            print(f"Error communicating with FTDI driver: {type(e).__name__} - {e}")
+            return
 
     def is_ready(self):
         """Robust method to check if the hardware is open and responding."""
@@ -139,7 +143,32 @@ class JtagController:
             setup_cmds += struct.pack('<BH', 0x86, divisor)
             
             self.device.write(bytes(setup_cmds))
+            
+            # --- TARGET POWER CHECK ---
+            # Do a dummy read to see if the target board is powered on
+            self.device.purge(ftd.defines.PURGE_RX)
+            self.device.write(self._tms_reset() + self._tms_to_shift_dr())
+            payload = b'\x28\x03\x00' + self._tms_to_idle() + b'\x87' # Read 32 bits
+            self.device.write(payload)
+            time.sleep(0.01)
+            
+            rx_data = self.device.read(4)
+            if len(rx_data) == 4:
+                test_val = struct.unpack('<I', rx_data)[0]
+                if test_val == 0xFFFFFFFF or test_val == 0x00000000:
+                    print(f"WARNING: FTDI opened, but JTAG chain is DEAD (Read: 0x{test_val:08X}).")
+                    print("Is the Zynq board powered off?")
+                    self.device.close()
+                    self.device = None
+                    return
+            else:
+                print("WARNING: Failed to read from JTAG chain. Target might be off.")
+                self.device.close()
+                self.device = None
+                return
+                
             print(f"FTDI connection opened. TCK set to ~{freq_hz/1e6:.1f} MHz.")
+            
         except Exception as e:
             print(f"Error initializing FTDI: {e}")
             self.device = None
@@ -405,7 +434,142 @@ class JtagController:
         print(f"CTRL/STAT ACK  : 0x{ack:02X} (Expected: 0x02 = OK)")
         print(f"CTRL/STAT DATA : 0x{ctrl_stat:08X} (Expected to start with 0xF... meaning Powered Up!)")
 
+    # --- CORESIGHT DAP MEMORY ACCESS (AHB-AP) ---
 
+    def _dap_write(self, is_ap, a32, data):
+        """
+        Low-level write to DP (is_ap=False) or AP (is_ap=True).
+        a32 is the A[3:2] address bits (0 to 3).
+        """
+        ir = 0x0B if is_ap else 0x0A
+        self.shift_ir(ir, tap_index=1)
+        # RnW=0 (Write)
+        req = (data << 3) | (a32 << 1) | 0
+        rx_val = self.shift_dr(req, dr_len=35, tap_index=1)
+        return rx_val & 0x07 # Return ACK
+
+    def _dap_read(self, is_ap, a32):
+        """
+        Low-level read from DP (is_ap=False) or AP (is_ap=True).
+        """
+        ir = 0x0B if is_ap else 0x0A
+        self.shift_ir(ir, tap_index=1)
+        # RnW=1 (Read)
+        req = (0 << 3) | (a32 << 1) | 1
+        
+        # Issue read request (first response is from previous transaction)
+        self.shift_dr(req, dr_len=35, tap_index=1)
+        # Dummy read to get the actual data
+        rx_val = self.shift_dr(req, dr_len=35, tap_index=1)
+        
+        return (rx_val >> 3) & 0xFFFFFFFF, rx_val & 0x07
+
+    def init_ahb_ap(self):
+        """Initializes the AHB-AP for memory access."""
+        # 1. Power up DP (System & Debug Power)
+        self._dap_write(is_ap=False, a32=1, data=0x50000000) # DP CTRL/STAT
+        
+        # 2. Select AP 0 (AHB-AP) and Bank 0 via DP SELECT register (A[3:2] = 2)
+        # APSEL = 0x00, APBANKSEL = 0x00
+        self._dap_write(is_ap=False, a32=2, data=0x00000000)
+        
+        # 3. Configure AP CSW (Control/Status Word) for 32-bit transfer (Size=2)
+        # and Auto-increment (AddrInc=1 for sequential writes).
+        # CSW is at AP Bank 0, Offset 0x00 (a32=0)
+        self._dap_write(is_ap=True, a32=0, data=0x23000002)
+
+    def write_mem32(self, address, data):
+        """Writes a 32-bit word to the physical memory address."""
+        # Write Address to TAR (Transfer Address Register, Offset 0x04 -> a32=1)
+        self._dap_write(is_ap=True, a32=1, data=address)
+        # Write Data to DRW (Data Read/Write Register, Offset 0x0C -> a32=3)
+        self._dap_write(is_ap=True, a32=3, data=data)
+
+    def read_mem32(self, address):
+        """Reads a 32-bit word from the physical memory address."""
+        # Write Address to TAR
+        self._dap_write(is_ap=True, a32=1, data=address)
+        # Read from DRW
+        data, ack = self._dap_read(is_ap=True, a32=3)
+        return data
+
+    # ==========================================
+    # TEST OCM RAM
+    # ==========================================
+    def test_ocm_ram(self):
+        """Verifies we can read/write the Zynq internal OCM memory."""
+        if not self.is_ready():
+            return
+            
+        print("\nTargeting ARM AHB-AP -> Testing OCM Memory Access...")
+        self.device.purge(ftd.defines.PURGE_RX)
+        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        
+        # 1. Initialize the AHB-AP bridge
+        self.init_ahb_ap()
+        
+        # 2. Address 0x00000000 corresponds to the start of the OCM (On-Chip Memory)
+        test_addr = 0x00000000
+        magic_word = 0xDEADBEEF
+        
+        print(f"Writing 0x{magic_word:08X} to address 0x{test_addr:08X}...")
+        self.write_mem32(test_addr, magic_word)
+        
+        # 3. Read back to verify
+        read_back = self.read_mem32(test_addr)
+        print(f"Read Value : 0x{read_back:08X}")
+        
+        if read_back == magic_word:
+            print("SUCCESS: OCM memory is accessible!")
+        else:
+            print("ERROR: Memory write failed.")
+
+
+    # ==========================================
+    # ZYNQ HARDWARE INITIALIZATION (Without FSBL)
+    # ==========================================
+    def init_qspi_hardware(self):
+        """Unlocks SLCR registers and configures MIO pins and Clocks for QSPI."""
+        if not self.is_ready():
+            return
+            
+        print("\nInitializing Zynq Hardware (SLCR) for QSPI...")
+        
+        # 1. Unlock SLCR (Official Xilinx unlock key)
+        SLCR_UNLOCK_ADDR = 0xF8000008
+        SLCR_UNLOCK_KEY  = 0x0000DF0D
+        self.write_mem32(SLCR_UNLOCK_ADDR, SLCR_UNLOCK_KEY)
+        print(" -> SLCR Unlocked.")
+
+        # 2. MIO 1-6 Pins Configuration
+        # Typical value: 0x00003301 or 0x00000301 (LVCMOS, Pull-up enabled, L0_SEL active)
+        # Note: This value might vary slightly based on your board's voltage.
+        MIO_BASE = 0xF8000700
+        mio_qspi_val = 0x00000301 
+        
+        for mio_pin in range(1, 7):
+            mio_addr = MIO_BASE + (mio_pin * 4)
+            self.write_mem32(mio_addr, mio_qspi_val)
+        
+        # MIO 8 for feedback clock (if used on your board)
+        # self.write_mem32(MIO_BASE + (8 * 4), mio_qspi_val) 
+        
+        print(" -> MIO 1-6 pins configured for QSPI.")
+
+        # 3. QSPI Clock Configuration (QSPI_CLK_CTRL)
+        QSPI_CLK_CTRL = 0xF800014C
+        # Enable the clock and set a conservative primary and secondary divisor
+        self.write_mem32(QSPI_CLK_CTRL, 0x00000100) 
+        print(" -> QSPI Clock activated.")
+
+        # 4. Lock SLCR (Protection against accidental writes)
+        SLCR_LOCK_ADDR = 0xF8000004
+        SLCR_LOCK_KEY  = 0x0000767B
+        self.write_mem32(SLCR_LOCK_ADDR, SLCR_LOCK_KEY)
+        print(" -> SLCR Locked and protected.")
+        print("SUCCESS: QSPI Controller ready for communication!")
+
+        
 # --- CLI INTERFACE ---
 
 menu_list = [
@@ -416,6 +580,7 @@ menu_list = [
     "4. Scan JTAG",
     "5. Read FPGA USERCODE",
     "6. Test ARM DAP",
+    "7. Test OCM RAM",
     "?. Help"
 ]
 
@@ -445,6 +610,8 @@ def main_loop(jtag):
             jtag.read_fpga_usercode()
         case "6":
             jtag.test_arm_dap()
+        case "7":
+            jtag.test_ocm_ram()
         case "?":
             show_menu()
         case _:
@@ -462,5 +629,3 @@ if __name__ == '__main__':
 
     print("Exiting...")
     jtag.close()
-
-    
