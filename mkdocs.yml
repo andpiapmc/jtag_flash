@@ -1,0 +1,13 @@
+site_name: Zynq-7000 JTAG Tool
+site_description: Low-level JTAG and QSPI Flash interaction tool for Xilinx Zynq-7000.
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+
+nav:
+  - Home: index.md
+  - Project Architecture: architecture.md
+  - JTAG Protocol Basics: jtag_basics.md
+  - FTDI MPSSE Engine: mpsse_protocol.md
