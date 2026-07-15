@@ -290,7 +290,7 @@ class JtagController:
             print("JTAG is not open. Please open a connection first.")
             return
             
-        print("\nTargeting ARM DAP -> CoreSight Initialization...")
+        print("Targeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
