@@ -10,6 +10,67 @@ import time
 import struct
 
 
+# =========================================================================
+# HARDWARE DEFINITIONS & CONSTANTS
+# =========================================================================
+
+class MpsseOpcodes:
+    """FTDI MPSSE Command Opcodes."""
+    DISABLE_CLK_DIV5      = b'\x8A'
+    TURN_OFF_ADAPTIVE_CLK = b'\x97'
+    DISABLE_3_PHASE_CLK   = b'\x8D'
+    SET_DATA_BITS_LOW     = b'\x80'
+    SET_DATA_BITS_HIGH    = b'\x82'
+    SET_TCK_DIVISOR       = b'\x86'
+    
+    # Data Shifting Opcodes
+    READ_DATA_BYTES_LSB   = b'\x28'
+    SHIFT_BYTES_LSB_RW    = b'\x39'
+    SHIFT_BITS_LSB_RW     = b'\x3B'
+    SHIFT_TMS_NO_READ     = b'\x4B'
+    SHIFT_TMS_READ        = b'\x6B'
+    SEND_IMMEDIATE        = b'\x87'
+
+class JtagInstr:
+    """JTAG Instruction Register (IR) Values."""
+    FPGA_USERCODE = 0x08
+    DAP_DPACC     = 0x0A  # Debug Port Access
+    DAP_APACC     = 0x0B  # Access Port Access
+    DAP_IDCODE    = 0x0E  # ARM CoreSight ID
+
+class CoreSightRegs:
+    """ARM CoreSight DP/AP Register Addresses (A[3:2] indices)."""
+    # Debug Port (DP) Registers
+    DP_ABORT      = 0x0
+    DP_CTRL_STAT  = 0x1
+    DP_SELECT     = 0x2
+    DP_RDBUFF     = 0x3
+    # Access Port (AP) Registers (specifically AHB-AP)
+    AP_CSW        = 0x0  # Control/Status Word
+    AP_TAR        = 0x1  # Transfer Address Register
+    AP_DRW        = 0x3  # Data Read/Write Register
+
+class ZynqRegs:
+    """Memory Map and Constants for Xilinx Zynq-7000 Series."""
+    # SLCR (System Level Control Registers)
+    SLCR_UNLOCK_ADDR = 0xF8000008
+    SLCR_LOCK_ADDR   = 0xF8000004
+    SLCR_UNLOCK_KEY  = 0x0000DF0D
+    SLCR_LOCK_KEY    = 0x0000767B
+    A9_CPU_RST_CTRL  = 0xF8000244
+
+    # QSPI Controller
+    QSPI_BASE        = 0xE000D000
+    QSPI_CONFIG      = QSPI_BASE + 0x00
+    QSPI_STATUS      = QSPI_BASE + 0x04
+    QSPI_ENABLE      = QSPI_BASE + 0x08
+    QSPI_TXD_FIFO    = QSPI_BASE + 0x1C
+    QSPI_RXD_FIFO    = QSPI_BASE + 0x20
+    QSPI_LQSPI_CFG   = QSPI_BASE + 0xA0
+    
+    # On-Chip Memory
+    OCM_BASE_ADDR    = 0x00000000
+
 # Dictionary of known TAP IDCODEs
 KNOWN_TAPS = {
     0x0BA00477: "ARM Cortex-A9 CoreSight DAP (Zynq 7000)",
@@ -48,28 +109,10 @@ FLASH_MEMORY_TYPES = {
     0xC8: { 0x40: "GD25Q (3.0V)", 0x60: "GD25LQ (1.8V)" }
 }
 
-class ZynqRegs:
-    """Memory Map and Constants for Xilinx Zynq-7000 Series."""
-    
-    # SLCR (System Level Control Registers)
-    SLCR_UNLOCK_ADDR = 0xF8000008
-    SLCR_LOCK_ADDR   = 0xF8000004
-    SLCR_UNLOCK_KEY  = 0x0000DF0D
-    SLCR_LOCK_KEY    = 0x0000767B
-    A9_CPU_RST_CTRL  = 0xF8000244
 
-    # QSPI Controller
-    QSPI_BASE        = 0xE000D000
-    QSPI_CONFIG      = QSPI_BASE + 0x00
-    QSPI_STATUS      = QSPI_BASE + 0x04
-    QSPI_ENABLE      = QSPI_BASE + 0x08
-    QSPI_TXD_FIFO    = QSPI_BASE + 0x1C
-    QSPI_RXD_FIFO    = QSPI_BASE + 0x20
-    QSPI_LQSPI_CFG   = QSPI_BASE + 0xA0
-    
-    # On-Chip Memory
-    OCM_BASE_ADDR    = 0x00000000
-
+# =========================================================================
+# JTAG CONTROLLER CLASS
+# =========================================================================
 
 class JtagController:
     """
@@ -77,7 +120,7 @@ class JtagController:
     """
     
     def __init__(self):
-        self.device = None
+        self.device = None  # FTDI device handle (ftd2xx object) for JTAG communication
 
     # ==========================================
     # FTDI DEVICE MANAGEMENT
@@ -137,7 +180,7 @@ class JtagController:
             self.device = ftd.open(device_index)
             self.device.setBitMode(0x00, 0)
             time.sleep(0.05)
-            self.device.setBitMode(0x0B, 2)
+            self.device.setBitMode(0x0B, 2)  # Enable MPSSE
             time.sleep(0.05)
             
             # Massive buffers for extreme speed during bulk writes
@@ -147,15 +190,23 @@ class JtagController:
             self.device.setLatencyTimer(16)
             self.device.purge(ftd.defines.PURGE_RX | ftd.defines.PURGE_TX)
             
-            setup_cmds = bytearray(b'\x8A\x97\x8D\x80\x88\xFB\x82\x00\x00')
+            # MPSSE Engine Configuration Setup
+            setup_cmds = bytearray()
+            setup_cmds += MpsseOpcodes.DISABLE_CLK_DIV5
+            setup_cmds += MpsseOpcodes.TURN_OFF_ADAPTIVE_CLK
+            setup_cmds += MpsseOpcodes.DISABLE_3_PHASE_CLK
+            setup_cmds += MpsseOpcodes.SET_DATA_BITS_LOW + b'\x88\xFB'  # Value/Dir for ADBUS
+            setup_cmds += MpsseOpcodes.SET_DATA_BITS_HIGH + b'\x00\x00' # Value/Dir for ACBUS
+            
+            # TCK frequency divisor calculation
             divisor = max(0, min(65535, int((30_000_000 / freq_hz) - 1)))
-            setup_cmds += struct.pack('<BH', 0x86, divisor)
+            setup_cmds += MpsseOpcodes.SET_TCK_DIVISOR + struct.pack('<H', divisor)
             self.device.write(bytes(setup_cmds))
             
-            # Target power check
+            # Target power check via blind TLR and read
             self.device.purge(ftd.defines.PURGE_RX)
             self.device.write(self._tms_reset() + self._tms_to_shift_dr())
-            self.device.write(b'\x28\x03\x00' + self._tms_to_idle() + b'\x87')
+            self.device.write(MpsseOpcodes.READ_DATA_BYTES_LSB + b'\x03\x00' + self._tms_to_idle() + MpsseOpcodes.SEND_IMMEDIATE)
             time.sleep(0.01)
             
             rx_data = self.device.read(4)
@@ -181,7 +232,7 @@ class JtagController:
         """Safely closes the active FTDI connection and resets the TAP state."""
         if self.is_ready():
             try:
-                self.device.write(b'\x80\x00\x00')
+                self.device.write(MpsseOpcodes.SET_DATA_BITS_LOW + b'\x00\x00') # Reset lines
                 self.device.close()
                 print("FTDI connection closed.")
             except Exception as e:
@@ -191,37 +242,110 @@ class JtagController:
         else:
             print("JTAG is not open.")
 
-    # ==========================================
-    # JTAG STATE MACHINE LOW-LEVEL
-    # ==========================================
+    # =========================================================================
+    # JTAG STATE MACHINE LOW-LEVEL (TMS CONTROL)
+    # =========================================================================
     
-    def _tms_reset(self): return b'\x4B\x07\xFF' * 4
-    def _tms_to_shift_dr(self): return b'\x4B\x03\x02'
-    def _tms_to_idle(self): return b'\x4B\x02\x03'
-    def _tms_exit_to_idle(self): return b'\x4B\x01\x01'
-    def _tms_tlr_to_idle(self): return b'\x4B\x00\x00'
-    def _tms_idle_to_shift_ir(self): return b'\x4B\x03\x03'
-    def _tms_idle_to_shift_dr(self): return b'\x4B\x02\x01'
+    def _build_tms_cmd(self, tms_sequence: int, bit_length: int) -> bytes:
+        """
+        Constructs the FTDI MPSSE command to shift bits out on the TMS pin.
+        
+        Args:
+            tms_sequence (int): The sequence of 1s and 0s to send (LSB first).
+            bit_length (int): The number of bits to shift (1 to 8).
+            
+        Returns:
+            bytes: The formatted 3-byte MPSSE command.
+        """
+        # FTDI protocol requires length to be (actual_length - 1)
+        # Directly concatenate the byte opcode with the packed payload
+        return MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', bit_length - 1, tms_sequence)
 
-    def _shift_bits(self, data_val, num_bits, is_ir=False):
+    def _tms_reset(self): 
+        """
+        Forces the TAP controller into the 'Test-Logic-Reset' (TLR) state.
+        JTAG requires at least 5 consecutive '1's on TMS to reset from any state.
+        We send 32 consecutive '1's (8 bits * 4) to absolutely guarantee a full chain reset.
+        """
+        return self._build_tms_cmd(0xFF, 8) * 4
+
+    def _tms_to_shift_dr(self): 
+        """
+        Navigates from 'Test-Logic-Reset' to 'Shift-DR'.
+        Path: TLR(0) -> Idle(1) -> Select-DR(0) -> Capture-DR(0) -> Shift-DR
+        Sequence: 0010 (LSB first) -> 0x02
+        """
+        return self._build_tms_cmd(0x02, 4)
+
+    def _tms_to_idle(self): 
+        """
+        Navigates from 'Shift-DR' or 'Shift-IR' back to 'Run-Test/Idle'.
+        Path: Shift(1) -> Exit1(1) -> Update(0) -> Idle
+        Sequence: 011 (LSB first) -> 0x03
+        """
+        return self._build_tms_cmd(0x03, 3)
+
+    def _tms_exit_to_idle(self): 
+        """
+        Navigates from 'Exit1-DR' or 'Exit1-IR' back to 'Run-Test/Idle'.
+        Path: Exit1(1) -> Update(0) -> Idle
+        Sequence: 01 (LSB first) -> 0x01
+        """
+        return self._build_tms_cmd(0x01, 2)
+
+    def _tms_tlr_to_idle(self): 
+        """
+        Navigates from 'Test-Logic-Reset' to 'Run-Test/Idle'.
+        Path: TLR(0) -> Idle
+        Sequence: 0 (LSB first) -> 0x00
+        """
+        return self._build_tms_cmd(0x00, 1)
+
+    def _tms_idle_to_shift_ir(self): 
+        """
+        Navigates from 'Run-Test/Idle' to 'Shift-IR'.
+        Path: Idle(1) -> Select-DR(1) -> Select-IR(0) -> Capture-IR(0) -> Shift-IR
+        Sequence: 0011 (LSB first) -> 0x03
+        """
+        return self._build_tms_cmd(0x03, 4)
+
+    def _tms_idle_to_shift_dr(self): 
+        """
+        Navigates from 'Run-Test/Idle' to 'Shift-DR'.
+        Path: Idle(1) -> Select-DR(0) -> Capture-DR(0) -> Shift-DR
+        Sequence: 001 (LSB first) -> 0x01
+        """
+        return self._build_tms_cmd(0x01, 3)
+
+    def _shift_bits(self, data_val: int, num_bits: int, is_ir: bool = False):
         """Core full-duplex MPSSE engine. Writes and reads bits simultaneously."""
         payload = bytearray(self._tms_idle_to_shift_ir() if is_ir else self._tms_idle_to_shift_dr())
         num_bytes, remaining_bits = (num_bits - 1) // 8, (num_bits - 1) % 8
         last_bit = (data_val >> (num_bits - 1)) & 0x01
         
+        # Shift out full bytes
         if num_bytes > 0:
-            payload += b'\x39' + struct.pack('<H', num_bytes - 1) + (data_val & ((1 << (num_bytes * 8)) - 1)).to_bytes(num_bytes, 'little')
-        if remaining_bits > 0:
-            payload += b'\x3B' + struct.pack('<B', remaining_bits - 1) + struct.pack('<B', (data_val >> (num_bytes * 8)) & 0xFF)
+            payload += MpsseOpcodes.SHIFT_BYTES_LSB_RW + struct.pack('<H', num_bytes - 1) 
+            payload += (data_val & ((1 << (num_bytes * 8)) - 1)).to_bytes(num_bytes, 'little')
         
-        payload += b'\x6B\x00' + struct.pack('<B', 0x01 | (last_bit << 7))
-        payload += self._tms_exit_to_idle() + b'\x87'
+        # Shift out remaining bits (excluding the very last bit)
+        if remaining_bits > 0:
+            payload += MpsseOpcodes.SHIFT_BITS_LSB_RW + struct.pack('<B', remaining_bits - 1) 
+            payload += struct.pack('<B', (data_val >> (num_bytes * 8)) & 0xFF)
+        
+        # Shift out the final bit simultaneously with the TMS exit transition
+        tms_byte = 0x01 | (last_bit << 7)
+        payload += MpsseOpcodes.SHIFT_TMS_READ + b'\x00' + struct.pack('<B', tms_byte)
+        
+        # Conclude and flush
+        payload += self._tms_exit_to_idle() + MpsseOpcodes.SEND_IMMEDIATE
         self.device.write(bytes(payload))
         
         expected_rx_len = num_bytes + (1 if remaining_bits > 0 else 0) + 1
         rx_data = self.device.read(expected_rx_len)
         rx_val = 0
         
+        # Assemble received data
         if len(rx_data) == expected_rx_len:
             idx = 0
             if num_bytes > 0:
@@ -236,44 +360,6 @@ class JtagController:
     # ==========================================
     # TAP OPERATIONS
     # ==========================================
-
-    def scan(self, max_devices: int = 8):
-        """
-        Performs a blind scan of the JTAG chain.
-        Reads up to `max_devices` to find and identify all TAPs present in the chain.
-
-        Args:
-            max_devices (int): Maximum number of devices to scan (default is 8).
-        """
-        if not self.is_ready(): 
-            print("JTAG is not open. Please open a connection first.")
-            return
-        try:
-            print("Scanning JTAG chain (Blind Scan)...")
-            self.device.purge(ftd.defines.PURGE_RX)
-            mpsse_payload = bytearray(self._tms_reset() + self._tms_to_shift_dr())
-            bytes_to_read = max_devices * 4
-            mpsse_payload += b'\x28' + struct.pack('<H', bytes_to_read - 1) + self._tms_to_idle() + b'\x87'              
-            self.device.write(bytes(mpsse_payload))
-            time.sleep(0.01)
-            
-            rx_data = self.device.read(bytes_to_read)
-            if len(rx_data) == bytes_to_read:
-                print("-" * 70)
-                print(f"{'TAP':<5} | {'RAW IDCODE':<10} | {'DEVICE DESCRIPTION'}")
-                print("-" * 70)
-                tap_count = 0
-                for i in range(max_devices):
-                    idcode = struct.unpack('<I', rx_data[i*4:(i+1)*4])[0]
-                    if idcode == 0xFFFFFFFF: break
-                    if (idcode & 0x01) == 0: continue
-                    tap_count += 1
-                    device_name = KNOWN_TAPS.get(idcode & 0x0FFFFFFF, "Unknown Device")
-                    print(f"{i:<5} | 0x{idcode:08X} | {device_name}")
-                print("-" * 70)
-                print(f"Total devices found: {tap_count}")
-        except Exception as e:
-            print(f"Error during scan: {e}")
 
     def shift_ir(self, instruction: int, tap_index: int):
         """
@@ -302,15 +388,51 @@ class JtagController:
         rx_val = self._shift_bits(shift_value, dr_len + 1, is_ir=False)
         return (rx_val >> 1) & ((1 << dr_len) - 1) if tap_index == 1 else rx_val & ((1 << dr_len) - 1)
 
+    def scan(self, max_devices: int = 8):
+        """
+        Performs a blind scan of the JTAG chain.
+        Reads up to `max_devices` to find and identify all TAPs present in the chain.
+        """
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
+        try:
+            print("Scanning JTAG chain (Blind Scan)...")
+            self.device.purge(ftd.defines.PURGE_RX)
+            mpsse_payload = bytearray(self._tms_reset() + self._tms_to_shift_dr())
+            bytes_to_read = max_devices * 4
+            mpsse_payload += MpsseOpcodes.READ_DATA_BYTES_LSB + struct.pack('<H', bytes_to_read - 1)
+            mpsse_payload += self._tms_to_idle() + MpsseOpcodes.SEND_IMMEDIATE
+            self.device.write(bytes(mpsse_payload))
+            time.sleep(0.01)
+            
+            rx_data = self.device.read(bytes_to_read)
+            if len(rx_data) == bytes_to_read:
+                print("-" * 70)
+                print(f"{'TAP':<5} | {'RAW IDCODE':<10} | {'DEVICE DESCRIPTION'}")
+                print("-" * 70)
+                tap_count = 0
+                for i in range(max_devices):
+                    idcode = struct.unpack('<I', rx_data[i*4:(i+1)*4])[0]
+                    if idcode == 0xFFFFFFFF: break
+                    if (idcode & 0x01) == 0: continue
+                    tap_count += 1
+                    device_name = KNOWN_TAPS.get(idcode & 0x0FFFFFFF, "Unknown Device")
+                    print(f"{i:<5} | 0x{idcode:08X} | {device_name}")
+                print("-" * 70)
+                print(f"Total devices found: {tap_count}")
+        except Exception as e:
+            print(f"Error during scan: {e}")
+            
     def read_fpga_usercode(self):
-        """Reads the USERCODE (Instruction 0x08) of the Zynq PL (FPGA)."""
+        """Reads the USERCODE of the Zynq PL (FPGA)."""
         if not self.is_ready():
             print("JTAG is not open. Please open a connection first.")
             return
         print("Targeting FPGA TAP -> Reading USERCODE...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
-        self.shift_ir(0x08, tap_index=0)
+        self.shift_ir(JtagInstr.FPGA_USERCODE, tap_index=0)
         print(f"FPGA USERCODE: 0x{self.shift_dr(0x00000000, 32, 0):08X}")
 
     # ========================================================
@@ -323,7 +445,7 @@ class JtagController:
             print("JTAG is not open. Please open a connection first.")
             return
             
-        print("\nTargeting ARM DAP -> CoreSight Initialization...")
+        print("Targeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -331,99 +453,88 @@ class JtagController:
         ack_labels = {
             0x01: "WAIT",
             0x02: "OK",
-            0x04: "FAULT" # In some non-standard contexts, used for explicit FAULT
+            0x04: "FAULT"
         }
         
-        self.shift_ir(0x0E, tap_index=1)
+        self.shift_ir(JtagInstr.DAP_IDCODE, tap_index=1)
         print(f"ARM IDCODE     : 0x{self.shift_dr(0x00000000, 32, 1):08X}")
         
-        self.shift_ir(0x0A, tap_index=1)
+        self.shift_ir(JtagInstr.DAP_DPACC, tap_index=1)
         
-        # TX 1: Issue ABORT command to clear sticky errors
-        self.shift_dr((0x0000001E << 3) | 0, dr_len=35, tap_index=1)
+        # TX 1: Issue ABORT command to clear sticky errors (Write to DP_ABORT)
+        req_abort = (0x0000001E << 3) | (CoreSightRegs.DP_ABORT << 1) | 0
+        self.shift_dr(req_abort, dr_len=35, tap_index=1)
         
-        # TX 2: Request PWRUP and read the ACK from the previous ABORT command
-        ack_abort = self.shift_dr((0x50000000 << 3) | 2, 35, 1) & 0x7
+        # TX 2: Request PWRUP (Write to DP_CTRL_STAT) and read previous ACK
+        req_pwrup = (0x50000000 << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | 0
+        ack_abort = self.shift_dr(req_pwrup, 35, 1) & 0x7
         print(f"ABORT ACK      : 0x{ack_abort:02X} [{ack_labels.get(ack_abort, 'INVALID/NO-ACK')}]")
         
         # TX 3: Read CTRL/STAT status and read the ACK from the PWRUP command
-        ack_pwrup = self.shift_dr((0x00000000 << 3) | 3, 35, 1) & 0x7
+        req_status = (0x00000000 << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | 1
+        ack_pwrup = self.shift_dr(req_status, 35, 1) & 0x7
         print(f"PWRUP ACK      : 0x{ack_pwrup:02X} [{ack_labels.get(ack_pwrup, 'INVALID/NO-ACK')}]")
         
         # TX 4: Dummy read to flush the data out and read the final ACK
-        rx_val = self.shift_dr((0x00000000 << 3) | 3, 35, 1)
+        rx_val = self.shift_dr(req_status, 35, 1)
         ack_ctrl = rx_val & 0x07
         
         print(f"CTRL/STAT ACK  : 0x{ack_ctrl:02X} [{ack_labels.get(ack_ctrl, 'INVALID/NO-ACK')}]")
 
-    def _dap_write(self, is_ap, a32, data):
-        self.shift_ir(0x0B if is_ap else 0x0A, tap_index=1)
-        return self.shift_dr((data << 3) | (a32 << 1) | 0, dr_len=35, tap_index=1) & 0x07
+    def _dap_write(self, is_ap: bool, a32: int, data: int):
+        """Writes a 32-bit word to a DAP register (DP or AP)."""
+        ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
+        self.shift_ir(ir, tap_index=1)
+        req = (data << 3) | (a32 << 1) | 0
+        return self.shift_dr(req, dr_len=35, tap_index=1) & 0x07
 
-    def _dap_read(self, is_ap, a32):
-        self.shift_ir(0x0B if is_ap else 0x0A, tap_index=1)
-        self.shift_dr((0 << 3) | (a32 << 1) | 1, dr_len=35, tap_index=1)
-        rx_val = self.shift_dr((0 << 3) | (a32 << 1) | 1, dr_len=35, tap_index=1)
+    def _dap_read(self, is_ap: bool, a32: int):
+        """Reads a 32-bit word from a DAP register (DP or AP)."""
+        ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
+        self.shift_ir(ir, tap_index=1)
+        req = (0 << 3) | (a32 << 1) | 1
+        self.shift_dr(req, dr_len=35, tap_index=1)
+        rx_val = self.shift_dr(req, dr_len=35, tap_index=1)
         return (rx_val >> 3) & 0xFFFFFFFF, rx_val & 0x07
 
     def init_ahb_ap(self):
         """Initializes the Advanced High-performance Bus Access Port (AHB-AP)."""
-        self._dap_write(False, 1, 0x50000000)
-        self._dap_write(False, 2, 0x00000000)
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_CTRL_STAT, data=0x50000000)
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_SELECT,    data=0x00000000)
         # CSW: Size=32bit (2), AddrInc=Single (1)
-        self._dap_write(True, 0, 0x23000012)
+        self._dap_write(is_ap=True,  a32=CoreSightRegs.AP_CSW,       data=0x23000012)
 
     def write_mem32(self, address: int, data: int):
-        """
-        Writes a single 32-bit word to the physical memory address.
-
-        Args:
-            address (int): The physical 32-bit destination address.
-            data (int): The 32-bit value to write.
-        """
-        self._dap_write(True, 1, address)
-        self._dap_write(True, 3, data)
+        """Writes a single 32-bit word to the physical memory address."""
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_DRW, data=data)
 
     def read_mem32(self, address: int) -> int:
-        """
-        Reads a single 32-bit word from the physical memory address.
-
-        Args:
-            address (int): The physical 32-bit source address.
-
-        Returns:
-            int: The 32-bit value read from memory.
-        """
-        self._dap_write(True, 1, address)
-        return self._dap_read(True, 3)[0]
+        """Reads a single 32-bit word from the physical memory address."""
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
+        return self._dap_read(is_ap=True, a32=CoreSightRegs.AP_DRW)[0]
         
     def write_mem32_bulk(self, start_address: int, words: list):
-        """
-        High-Speed Bulk Engine: Packs multiple APB transactions into single USB transfers.
-        
-        Args:
-            start_address (int): The starting physical memory address.
-            words (list): List of 32-bit integers to write sequentially.
-        """
-        self._dap_write(is_ap=True, a32=1, data=start_address)
-        self.shift_ir(0x0B, tap_index=1)
+        """High-Speed Bulk Engine: Packs multiple APB transactions into single USB transfers."""
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=start_address)
+        self.shift_ir(JtagInstr.DAP_APACC, tap_index=1)
         
         batch_size = 800
         for i in range(0, len(words), batch_size):
             batch = words[i:i+batch_size]
             payload = bytearray()
             for w in batch:
-                req = (w << 3) | (3 << 1) | 0
+                req = (w << 3) | (CoreSightRegs.AP_DRW << 1) | 0
                 shift_val = (req << 1) | 0x01
                 
                 payload += self._tms_idle_to_shift_dr()
-                payload += b'\x39\x03\x00' + (shift_val & 0xFFFFFFFF).to_bytes(4, 'little')
+                payload += MpsseOpcodes.SHIFT_BYTES_LSB_RW + b'\x03\x00' + (shift_val & 0xFFFFFFFF).to_bytes(4, 'little')
                 
                 rem_val = (shift_val >> 32) & 0x0F
-                payload += b'\x3B\x02' + struct.pack('<B', rem_val & 0x07)
+                payload += MpsseOpcodes.SHIFT_BITS_LSB_RW + b'\x02' + struct.pack('<B', rem_val & 0x07)
                 
                 tms_byte = 0x01 | (((rem_val >> 3) & 0x01) << 7)
-                payload += b'\x4B\x00' + struct.pack('<B', tms_byte)
+                payload += MpsseOpcodes.SHIFT_TMS_NO_READ + b'\x00' + struct.pack('<B', tms_byte)
                 payload += self._tms_exit_to_idle()
                 
             self.device.write(bytes(payload))
@@ -438,7 +549,7 @@ class JtagController:
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print("\nTargeting ARM AHB-AP -> Testing OCM Memory Access...")
+        print("Targeting ARM AHB-AP -> Testing OCM Memory Access...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -453,17 +564,11 @@ class JtagController:
     def run_fsbl_bin(self, filepath: str = "fsbl.bin"):
         """
         Loads and executes the First Stage Boot Loader (FSBL) into OCM.
-
-        This method uses the high-speed bulk write to transfer the binary
-        and properly controls the CPU0 reset line to start execution.
-
-        Args:
-            filepath (str): Path to the FSBL binary file (default is "fsbl.bin").
         """
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print(f"\nTargeting ARM -> Loading '{filepath}' into OCM...")
+        print(f"Targeting ARM -> Loading '{filepath}' into OCM...")
         
         try:
             with open(filepath, "rb") as f:
@@ -508,13 +613,12 @@ class JtagController:
         """
         Asks the external QSPI Flash for its JEDEC ID.
         Requires the hardware to be properly initialized (e.g., via FSBL) beforehand.
-        Automatically decodes the manufacturer and memory capacity.
         """
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
             
-        print("\nTargeting QSPI Controller -> Reading Flash JEDEC ID...")
+        print("Targeting QSPI Controller -> Reading Flash JEDEC ID...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         self.init_ahb_ap()
@@ -526,25 +630,16 @@ class JtagController:
         base_cfg = self.read_mem32(ZynqRegs.QSPI_CONFIG)
         
         # Ensure Manual CS and Manual Start control
-        # Bit 15: Manual Start Enable = 1
-        # Bit 14: Manual CS Enable = 1
-        # Bit 10: PCS0 (Chip Select) = 1 (De-asserted / High)
         CONFIG_IDLE = base_cfg | (1 << 15) | (1 << 14) | (1 << 10)
-        
-        # CS Asserted (Bit 10 = 0)
         CONFIG_CS0  = CONFIG_IDLE & ~(1 << 10)
-        
-        # Manual trigger (Bit 16 = 1)
         CONFIG_TRIG = CONFIG_CS0 | (1 << 16)
         
         # Load IDLE config and enable the controller
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_IDLE)
         self.write_mem32(ZynqRegs.QSPI_ENABLE, 0x00000001)
         
-        # Assert Chip Select
+        # Assert Chip Select and Write JEDEC Command (0x9F) into TX FIFO
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_CS0) 
-        
-        # Write JEDEC Command (0x9F) into TX FIFO
         self.write_mem32(ZynqRegs.QSPI_TXD_FIFO, 0x0000009F)
         
         # FIRE! (Trigger transmission)
@@ -566,9 +661,8 @@ class JtagController:
         # De-assert Chip Select
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_IDLE)
         
-        # Read response (First 8 bits are garbage, next 24 are ID)
+        # Read response
         rx_val = self.read_mem32(ZynqRegs.QSPI_RXD_FIFO)
-        
         manuf_id = (rx_val >> 8) & 0xFF
         mem_type = (rx_val >> 16) & 0xFF
         mem_cap  = (rx_val >> 24) & 0xFF
@@ -582,12 +676,8 @@ class JtagController:
             return
         
         manuf_name = FLASH_MANUFACTURERS.get(manuf_id, "Unknown Manufacturer")
-        
-        # Interpret Memory Type based on Manufacturer
-        mem_type_dict = FLASH_MEMORY_TYPES.get(manuf_id, {})
-        mem_type_name = mem_type_dict.get(mem_type, "Unknown Type")
+        mem_type_name = FLASH_MEMORY_TYPES.get(manuf_id, {}).get(mem_type, "Unknown Type")
 
-        # Calculate memory capacity (mem_cap usually represents 2^N bytes)
         try:
             capacity_bytes = 1 << mem_cap
             if capacity_bytes >= (1024 * 1024):
@@ -604,13 +694,20 @@ class JtagController:
 
 
 # --- CLI INTERFACE ---
-menu_list = [
-    "0. Exit", "1. List FTDI devices", "2. Open JTAG", "3. Close JTAG",
-    "4. Scan JTAG", "5. Read FPGA USERCODE", "6. Test ARM DAP", 
-    "7. Test OCM RAM", "8. Load & Run fsbl.bin", "9. Read QSPI JEDEC ID", "?. Help"
-]
-
 def show_menu():
+    menu_list = [
+        "0. Exit",
+        "1. List FTDI devices", 
+        "2. Open JTAG", 
+        "3. Close JTAG",
+        "4. Scan JTAG", 
+        "5. Read FPGA USERCODE", 
+        "6. Test ARM DAP", 
+        "7. Test OCM RAM", 
+        "8. Load & Run fsbl.bin", 
+        "9. Read QSPI JEDEC ID", 
+        "?. Help"
+    ]
     print("\n" + "-" * 40)
     for item in menu_list: 
         print(item)
@@ -621,9 +718,7 @@ def main_loop(jtag):
     match choice:
         case "0": return False
         case "1": jtag.list_ftdi_devices()
-        case "2": 
-            # Open JTAG at 15 MHz to unleash Bulk Write performance
-            jtag.open(0, freq_hz=15_000_000)
+        case "2": jtag.open(0, freq_hz=15_000_000)
         case "3": jtag.close()
         case "4": jtag.scan()
         case "5": jtag.read_fpga_usercode()
