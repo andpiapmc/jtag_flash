@@ -9,7 +9,8 @@ import time
 import struct
 from zynq_constants import (
     MpsseOpcodes, JtagInstr, CoreSightRegs, ZynqRegs, 
-    KNOWN_TAPS, FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES
+    KNOWN_TAPS, FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES,
+    DapReq, AhbApRegs, QspiConfig  # <--- Nuove classi aggiunte qui
 )
 
 class JtagController:
@@ -197,17 +198,17 @@ class JtagController:
         self.write_mem32(ZynqRegs.QSPI_LQSPI_CFG, 0x00000000) 
         base_cfg = self.read_mem32(ZynqRegs.QSPI_CONFIG)
         
-        # Build manual toggle control words
-        CONFIG_IDLE = base_cfg | (1 << 15) | (1 << 14) | (1 << 10)
-        CONFIG_CS0  = CONFIG_IDLE & ~(1 << 10)
-        CONFIG_TRIG = CONFIG_CS0 | (1 << 16)
+        # Build manual toggle control words using named flags
+        CONFIG_IDLE = base_cfg | QspiConfig.MANUAL_START_EN | QspiConfig.MANUAL_CS_EN | QspiConfig.PCS0_HIGH
+        CONFIG_CS0  = CONFIG_IDLE & ~QspiConfig.PCS0_HIGH
+        CONFIG_TRIG = CONFIG_CS0 | QspiConfig.MANUAL_START
         
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_IDLE)
-        self.write_mem32(ZynqRegs.QSPI_ENABLE, 0x00000001)
+        self.write_mem32(ZynqRegs.QSPI_ENABLE, 0x00000001) # Enable QSPI peripheral
         
-        # Assert Chip Select, write JEDEC command (0x9F) and trigger manual flash SPI transaction
+        # Assert Chip Select, write JEDEC command and trigger manual flash SPI transaction
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_CS0) 
-        self.write_mem32(ZynqRegs.QSPI_TXD_FIFO, 0x0000009F)
+        self.write_mem32(ZynqRegs.QSPI_TXD_FIFO, QspiConfig.JEDEC_CMD)
         self.write_mem32(ZynqRegs.QSPI_CONFIG, CONFIG_TRIG)
         
         tx_success = False
@@ -289,7 +290,7 @@ class JtagController:
             print("JTAG is not open. Please open a connection first.")
             return
             
-        print("Targeting ARM DAP -> CoreSight Initialization...")
+        print("\nTargeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -300,20 +301,29 @@ class JtagController:
         
         self._shift_ir(JtagInstr.DAP_DPACC, tap_index=1)
         
-        req_abort = (0x0000001E << 3) | (CoreSightRegs.DP_ABORT << 1) | 0
-        self._shift_dr(req_abort, dr_len=35, tap_index=1)
+        # Clear sticky errors
+        req_abort = (DapReq.CLEAR_ERR << 3) | (CoreSightRegs.DP_ABORT << 1) | DapReq.WRITE
+        self._shift_dr(req_abort, dr_len=DapReq.SHIFT_LEN, tap_index=1)
         
-        req_pwrup = (0x50000000 << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | 0
-        ack_abort = self._shift_dr(req_pwrup, 35, 1) & 0x7
+        # Power up debug domains
+        req_pwrup = (DapReq.PWRUP_REQ << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | DapReq.WRITE
+        ack_abort = self._shift_dr(req_pwrup, dr_len=DapReq.SHIFT_LEN, tap_index=1) & DapReq.ACK_MASK
         print(f"ABORT ACK      : 0x{ack_abort:02X} [{ack_labels.get(ack_abort, 'INVALID/NO-ACK')}]")
         
-        req_status = (0x00000000 << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | 1
-        ack_pwrup = self._shift_dr(req_status, 35, 1) & 0x7
+        # Read back status
+        req_status = (0x00000000 << 3) | (CoreSightRegs.DP_CTRL_STAT << 1) | DapReq.READ
+        ack_pwrup = self._shift_dr(req_status, dr_len=DapReq.SHIFT_LEN, tap_index=1) & DapReq.ACK_MASK
         print(f"PWRUP ACK      : 0x{ack_pwrup:02X} [{ack_labels.get(ack_pwrup, 'INVALID/NO-ACK')}]")
         
-        rx_val = self._shift_dr(req_status, 35, 1)
-        ack_ctrl = rx_val & 0x07
+        # Extract status data
+        rx_val = self._shift_dr(req_status, dr_len=DapReq.SHIFT_LEN, tap_index=1)
+        ack_ctrl = rx_val & DapReq.ACK_MASK
         print(f"CTRL/STAT ACK  : 0x{ack_ctrl:02X} [{ack_labels.get(ack_ctrl, 'INVALID/NO-ACK')}]")
+
+    def _init_ahb_ap(self):
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_CTRL_STAT, data=DapReq.PWRUP_REQ)
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_SELECT,    data=0x00000000)
+        self._dap_write(is_ap=True,  a32=CoreSightRegs.AP_CSW,       data=AhbApRegs.CSW_DEFAULT_32BIT)
 
     def write_mem32(self, address: int, data: int):
         """Writes a discrete 32-bit word directly to an absolute physical address via AHB-AP."""
@@ -367,16 +377,18 @@ class JtagController:
     def _dap_write(self, is_ap: bool, a32: int, data: int):
         ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
         self._shift_ir(ir, tap_index=1)
-        req = (data << 3) | (a32 << 1) | 0
-        return self._shift_dr(req, dr_len=35, tap_index=1) & 0x07
+        # 35-bit frame: Data (32) | Address (2) | Write Flag (1)
+        req = (data << 3) | (a32 << 1) | DapReq.WRITE
+        return self._shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1) & DapReq.ACK_MASK
 
     def _dap_read(self, is_ap: bool, a32: int):
         ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
         self._shift_ir(ir, tap_index=1)
-        req = (0 << 3) | (a32 << 1) | 1
-        self._shift_dr(req, dr_len=35, tap_index=1)
-        rx_val = self._shift_dr(req, dr_len=35, tap_index=1)
-        return (rx_val >> 3) & 0xFFFFFFFF, rx_val & 0x07
+        # 35-bit frame: Dummy Data (32) | Address (2) | Read Flag (1)
+        req = (0 << 3) | (a32 << 1) | DapReq.READ
+        self._shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1) # First shift initiates read
+        rx_val = self._shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1) # Second shift extracts data
+        return (rx_val >> 3) & 0xFFFFFFFF, rx_val & DapReq.ACK_MASK
 
     def _init_ahb_ap(self):
         self._dap_write(is_ap=False, a32=CoreSightRegs.DP_CTRL_STAT, data=0x50000000)

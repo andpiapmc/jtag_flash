@@ -43,6 +43,37 @@ class CoreSightRegs:
     AP_DRW        = 0x3  # Data Read/Write Register
 
 
+class DapReq:
+    """ARM DAP Transaction Constants and Bitmasks."""
+    # A DAP request is 35 bits: [34:3 Data] | [2:1 Addr A32] | [0 RnW]
+    READ      = 1
+    WRITE     = 0
+    SHIFT_LEN = 35 
+    ACK_MASK  = 0x07
+
+    # DP_ABORT Register Flags
+    CLEAR_ERR = 0x0000001E  # Clears WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
+
+    # DP_CTRL_STAT Register Flags
+    PWRUP_REQ = 0x50000000  # Sets CSYSPWRUPREQ and CDBGPWRUPREQ
+
+
+class AhbApRegs:
+    """Advanced High-performance Bus Access Port (AHB-AP) Constants."""
+    # Control/Status Word (CSW) configuration
+    # Size=32bit (b010), AddrInc=Single (b01), DeviceEn=1, Prot=0x23
+    CSW_DEFAULT_32BIT = 0x23000012
+
+
+class QspiConfig:
+    """Zynq QSPI Controller Configuration Flags."""
+    MANUAL_START_EN = (1 << 15)
+    MANUAL_CS_EN    = (1 << 14)
+    PCS0_HIGH       = (1 << 10)  # Chip Select 0 De-asserted (High)
+    MANUAL_START    = (1 << 16)  # Trigger transmission bit
+    JEDEC_CMD       = 0x0000009F # Standard Read JEDEC ID command
+
+    
 class ZynqRegs:
     """Memory Map and Constants for Xilinx Zynq-7000 Series."""
     # SLCR (System Level Control Registers)
