@@ -24,6 +24,30 @@ KNOWN_TAPS = {
     0x04721093: "Xilinx Zynq UltraScale+ ZU4/ZU5/ZU7"
 }
 
+# Dictionary of common SPI Flash Manufacturer IDs (JEP106)
+FLASH_MANUFACTURERS = {
+    0x01: "Spansion / Cypress (Infineon)",
+    0x1C: "EON Silicon Devices",
+    0x1F: "Adesto / Dialog Semiconductor",
+    0x20: "Micron / ST (Numonyx)",
+    0x85: "Puya Semiconductor",
+    0x9D: "ISSI (Integrated Silicon Solution Inc.)",
+    0xBF: "SST / Microchip",
+    0xC2: "Macronix (MXIC)",
+    0xC8: "GigaDevice",
+    0xEF: "Winbond"
+}
+
+# Dictionary for Memory Types based on Manufacturer ID
+FLASH_MEMORY_TYPES = {
+    0x9D: { 0x40: "IS25LQ (3.0V Quad)", 0x60: "IS25LP (3.0V Quad)", 0x70: "IS25WP (1.8V Quad)" },
+    0xEF: { 0x30: "W25X", 0x40: "W25Q (SPI)", 0x60: "W25Q (QPI)" },
+    0xC2: { 0x20: "MX25L (3.0V)", 0x25: "MX25U (1.8V)", 0x28: "MX25R (Ultra Low Power)" },
+    0x20: { 0x20: "M25P", 0xBA: "N25Q / MT25QL (3.0V)", 0xBB: "MT25QU (1.8V)" },
+    0x01: { 0x02: "S25FL-A/K (3.0V)", 0x20: "S25FL-S (3.0V)" },
+    0xC8: { 0x40: "GD25Q (3.0V)", 0x60: "GD25LQ (1.8V)" }
+}
+
 class ZynqRegs:
     """Memory Map and Constants for Xilinx Zynq-7000 Series."""
     
@@ -298,19 +322,39 @@ class JtagController:
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print("Targeting ARM DAP -> CoreSight Initialization...")
+            
+        print("\nTargeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        
+        # Dictionary to decode ARM JTAG-DP protocol ACKs
+        ack_labels = {
+            0x01: "WAIT",
+            0x02: "OK",
+            0x04: "FAULT" # In some non-standard contexts, used for explicit FAULT
+        }
         
         self.shift_ir(0x0E, tap_index=1)
         print(f"ARM IDCODE     : 0x{self.shift_dr(0x00000000, 32, 1):08X}")
         
         self.shift_ir(0x0A, tap_index=1)
+        
+        # TX 1: Issue ABORT command to clear sticky errors
         self.shift_dr((0x0000001E << 3) | 0, dr_len=35, tap_index=1)
-        print(f"ABORT ACK      : 0x{self.shift_dr((0x50000000 << 3) | 2, 35, 1) & 0x7:02X}")
-        print(f"PWRUP ACK      : 0x{self.shift_dr((0x00000000 << 3) | 3, 35, 1) & 0x7:02X}")
+        
+        # TX 2: Request PWRUP and read the ACK from the previous ABORT command
+        ack_abort = self.shift_dr((0x50000000 << 3) | 2, 35, 1) & 0x7
+        print(f"ABORT ACK      : 0x{ack_abort:02X} [{ack_labels.get(ack_abort, 'INVALID/NO-ACK')}]")
+        
+        # TX 3: Read CTRL/STAT status and read the ACK from the PWRUP command
+        ack_pwrup = self.shift_dr((0x00000000 << 3) | 3, 35, 1) & 0x7
+        print(f"PWRUP ACK      : 0x{ack_pwrup:02X} [{ack_labels.get(ack_pwrup, 'INVALID/NO-ACK')}]")
+        
+        # TX 4: Dummy read to flush the data out and read the final ACK
         rx_val = self.shift_dr((0x00000000 << 3) | 3, 35, 1)
-        print(f"CTRL/STAT ACK  : 0x{rx_val & 0x07:02X}")
+        ack_ctrl = rx_val & 0x07
+        
+        print(f"CTRL/STAT ACK  : 0x{ack_ctrl:02X} [{ack_labels.get(ack_ctrl, 'INVALID/NO-ACK')}]")
 
     def _dap_write(self, is_ap, a32, data):
         self.shift_ir(0x0B if is_ap else 0x0A, tap_index=1)
@@ -394,7 +438,7 @@ class JtagController:
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print("Targeting ARM AHB-AP -> Testing OCM Memory Access...")
+        print("\nTargeting ARM AHB-AP -> Testing OCM Memory Access...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -419,7 +463,7 @@ class JtagController:
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print(f"Targeting ARM -> Loading '{filepath}' into OCM...")
+        print(f"\nTargeting ARM -> Loading '{filepath}' into OCM...")
         
         try:
             with open(filepath, "rb") as f:
@@ -464,11 +508,13 @@ class JtagController:
         """
         Asks the external QSPI Flash for its JEDEC ID.
         Requires the hardware to be properly initialized (e.g., via FSBL) beforehand.
+        Automatically decodes the manufacturer and memory capacity.
         """
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print("Targeting QSPI Controller -> Reading Flash JEDEC ID...")
+            
+        print("\nTargeting QSPI Controller -> Reading Flash JEDEC ID...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         self.init_ahb_ap()
@@ -527,16 +573,34 @@ class JtagController:
         mem_type = (rx_val >> 16) & 0xFF
         mem_cap  = (rx_val >> 24) & 0xFF
         
-        print("-" * 40)
-        print(f"JEDEC ID : {manuf_id:02X} {mem_type:02X} {mem_cap:02X}")
-        print("-" * 40)
+        print("-" * 50)
+        print(f"RAW JEDEC ID : {manuf_id:02X} {mem_type:02X} {mem_cap:02X}")
+        print("-" * 50)
         
         if manuf_id in (0x00, 0xFF):
-            print("ERROR: Invalid JEDEC ID. Flash MISO line is silent.")
-        elif manuf_id == 0x9D:
-            print("SUCCESS: ISSI Flash memory detected perfectly!")
-        else:
-            print(f"SUCCESS: Flash memory detected (Manufacturer: 0x{manuf_id:02X}).")
+            print("ERROR: Invalid JEDEC ID. Flash MISO line is silent or shorted.")
+            return
+        
+        manuf_name = FLASH_MANUFACTURERS.get(manuf_id, "Unknown Manufacturer")
+        
+        # Interpret Memory Type based on Manufacturer
+        mem_type_dict = FLASH_MEMORY_TYPES.get(manuf_id, {})
+        mem_type_name = mem_type_dict.get(mem_type, "Unknown Type")
+
+        # Calculate memory capacity (mem_cap usually represents 2^N bytes)
+        try:
+            capacity_bytes = 1 << mem_cap
+            if capacity_bytes >= (1024 * 1024):
+                cap_str = f"{capacity_bytes // (1024 * 1024)} MB"
+            else:
+                cap_str = f"{capacity_bytes // 1024} KB"
+        except Exception:
+            cap_str = "Unknown Capacity"
+            
+        print("SUCCESS: Flash memory detected!")
+        print(f" -> Manufacturer : {manuf_name} (0x{manuf_id:02X})")
+        print(f" -> Memory Type  : {mem_type_name} (0x{mem_type:02X})")
+        print(f" -> Capacity     : {cap_str} (0x{mem_cap:02X})")
 
 
 # --- CLI INTERFACE ---
