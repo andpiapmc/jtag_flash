@@ -1,7 +1,8 @@
 """
 JTAG Management Tool for Xilinx Zynq-7000 Series.
-Provides low-level JTAG interactions, CoreSight DAP debugging,
+Provides low-level JTAG interactions, CoreSight Debug Access Port (DAP) debugging,
 On-Chip Memory (OCM) access, and QSPI Flash manipulation via FTDI MPSSE.
+Uses the official 'ftd2xx' backend for native Windows driver compatibility.
 """
 
 import ftd2xx as ftd
@@ -42,17 +43,17 @@ class ZynqRegs:
     QSPI_RXD_FIFO    = QSPI_BASE + 0x20
     QSPI_LQSPI_CFG   = QSPI_BASE + 0xA0
     
-    # Internal Memory
+    # On-Chip Memory
     OCM_BASE_ADDR    = 0x00000000
 
 
 class JtagController:
     """
-    Class to encapsulate and manage the JTAG interface via FTDI MPSSE.
+    Class to encapsulate and manage the JTAG interface via FTDI MPSSE using ftd2xx.
     """
     
     def __init__(self):
-        self.device = None  # FTDI device handle for JTAG communication
+        self.device = None
 
     # ==========================================
     # FTDI DEVICE MANAGEMENT
@@ -61,10 +62,10 @@ class JtagController:
     @staticmethod
     def list_ftdi_devices():
         """
-        Scans and lists all connected FTDI devices.
+        Scans and lists all connected FTDI devices using the official drivers.
         Prints the device index, description, and serial number.
         """
-        print("Scanning for FTDI devices...")
+        print("Scanning for FTDI devices via ftd2xx...")
         try:
             num_devices = ftd.createDeviceInfoList()
             if num_devices == 0:
@@ -75,7 +76,7 @@ class JtagController:
                 detail = ftd.getDeviceInfoDetail(i)
                 desc = detail.get('description', b'Unknown').decode('utf-8', errors='ignore')
                 serial = detail.get('serial', b'Unknown').decode('utf-8', errors='ignore')
-                print(f"  Index {i}: {desc} (Serial: {serial})")
+                print(f"{i}: {desc} (Serial: {serial})")
         except Exception as e:
             print(f"Error communicating with FTDI driver: {type(e).__name__} - {e}")
             return
@@ -193,9 +194,11 @@ class JtagController:
         payload += self._tms_exit_to_idle() + b'\x87'
         self.device.write(bytes(payload))
         
-        rx_data = self.device.read(num_bytes + (1 if remaining_bits > 0 else 0) + 1)
+        expected_rx_len = num_bytes + (1 if remaining_bits > 0 else 0) + 1
+        rx_data = self.device.read(expected_rx_len)
         rx_val = 0
-        if len(rx_data) == (num_bytes + (1 if remaining_bits > 0 else 0) + 1):
+        
+        if len(rx_data) == expected_rx_len:
             idx = 0
             if num_bytes > 0:
                 rx_val = int.from_bytes(rx_data[0:num_bytes], 'little')
@@ -213,13 +216,14 @@ class JtagController:
     def scan(self, max_devices: int = 8):
         """
         Performs a blind scan of the JTAG chain.
-        
         Reads up to `max_devices` to find and identify all TAPs present in the chain.
 
         Args:
             max_devices (int): Maximum number of devices to scan (default is 8).
         """
-        if not self.is_ready(): return
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
         try:
             print("Scanning JTAG chain (Blind Scan)...")
             self.device.purge(ftd.defines.PURGE_RX)
@@ -231,9 +235,9 @@ class JtagController:
             
             rx_data = self.device.read(bytes_to_read)
             if len(rx_data) == bytes_to_read:
-                print("-" * 80)
+                print("-" * 70)
                 print(f"{'TAP':<5} | {'RAW IDCODE':<10} | {'DEVICE DESCRIPTION'}")
-                print("-" * 80)
+                print("-" * 70)
                 tap_count = 0
                 for i in range(max_devices):
                     idcode = struct.unpack('<I', rx_data[i*4:(i+1)*4])[0]
@@ -242,8 +246,8 @@ class JtagController:
                     tap_count += 1
                     device_name = KNOWN_TAPS.get(idcode & 0x0FFFFFFF, "Unknown Device")
                     print(f"{i:<5} | 0x{idcode:08X} | {device_name}")
-                print("-" * 80)
-                print(f"Total devices found: {tap_count}\n")
+                print("-" * 70)
+                print(f"Total devices found: {tap_count}")
         except Exception as e:
             print(f"Error during scan: {e}")
 
@@ -276,21 +280,25 @@ class JtagController:
 
     def read_fpga_usercode(self):
         """Reads the USERCODE (Instruction 0x08) of the Zynq PL (FPGA)."""
-        if not self.is_ready(): return
-        print("\nTargeting FPGA TAP -> Reading USERCODE...")
+        if not self.is_ready():
+            print("JTAG is not open. Please open a connection first.")
+            return
+        print("Targeting FPGA TAP -> Reading USERCODE...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         self.shift_ir(0x08, tap_index=0)
         print(f"FPGA USERCODE: 0x{self.shift_dr(0x00000000, 32, 0):08X}")
 
-    # ==========================================
-    # CORESIGHT DAP & AHB-AP INTERACTIONS
-    # ==========================================
+    # ========================================================
+    # CORESIGHT DAP (Debug Access Port) & AHB-AP INTERACTIONS
+    # ========================================================
 
     def test_arm_dap(self):
         """Interrogates and initializes the ARM Debug Port (CoreSight JTAG-DP)."""
-        if not self.is_ready(): return
-        print("\nTargeting ARM DAP -> CoreSight Initialization...")
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
+        print("Targeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -383,8 +391,10 @@ class JtagController:
 
     def test_ocm_ram(self):
         """Verifies read/write capabilities on the Zynq internal OCM memory."""
-        if not self.is_ready(): return
-        print("\nTargeting ARM AHB-AP -> Testing OCM Memory Access...")
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
+        print("Targeting ARM AHB-AP -> Testing OCM Memory Access...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         
@@ -406,8 +416,10 @@ class JtagController:
         Args:
             filepath (str): Path to the FSBL binary file (default is "fsbl.bin").
         """
-        if not self.is_ready(): return
-        print(f"\nTargeting ARM -> Loading '{filepath}' into OCM...")
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
+        print(f"Targeting ARM -> Loading '{filepath}' into OCM...")
         
         try:
             with open(filepath, "rb") as f:
@@ -453,8 +465,10 @@ class JtagController:
         Asks the external QSPI Flash for its JEDEC ID.
         Requires the hardware to be properly initialized (e.g., via FSBL) beforehand.
         """
-        if not self.is_ready(): return
-        print("\nTargeting QSPI Controller -> Reading Flash JEDEC ID...")
+        if not self.is_ready(): 
+            print("JTAG is not open. Please open a connection first.")
+            return
+        print("Targeting QSPI Controller -> Reading Flash JEDEC ID...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         self.init_ahb_ap()
