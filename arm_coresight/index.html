@@ -11,10 +11,8 @@
       
       
       
-        <link rel="prev" href="../architecture/">
+        <link rel="prev" href="../mpsse_protocol/">
       
-      
-        <link rel="next" href="../mpsse_protocol/">
       
       
         
@@ -25,7 +23,7 @@
     
     
       
-        <title>JTAG Protocol Basics - Zynq-7000 JTAG Tool</title>
+        <title>ARM Coresight - Zynq-7000 JTAG Tool</title>
       
     
     
@@ -74,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#jtag-protocol-basics" class="md-skip">
+        <a href="#zynq-7000-debug-architecture-coresight-topology" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              JTAG Protocol Basics
+              ARM Coresight
             
           </span>
         </div>
@@ -257,37 +255,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    JTAG Protocol Basics
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../jtag_basics/" class="md-nav__link">
         
   
   
@@ -303,65 +274,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#the-4-wire-bus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The 4-Wire Bus
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-tap-controller-state-machine" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The TAP Controller State Machine
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The TAP Controller State Machine">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-navigating-to-shift-dr" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example: Navigating to Shift-DR
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -397,10 +309,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../arm_coresight/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ARM Coresight
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -416,6 +355,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#system-topology-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🗺️ System Topology Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#processing-system-ps-vs-programmable-logic-pl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🧠 Processing System (PS) vs. 🚀 Programmable Logic (PL)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-access-ports-aps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚪 The Access Ports (APs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-internal-buses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛣️ The Internal Buses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ahb-ap-vs-apb-a-quick-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📊 AHB-AP vs APB: A Quick Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -447,10 +461,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-4-wire-bus" class="md-nav__link">
+  <a href="#system-topology-diagram" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The 4-Wire Bus
+        🗺️ System Topology Diagram
       
     </span>
   </a>
@@ -458,30 +472,46 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-tap-controller-state-machine" class="md-nav__link">
+  <a href="#processing-system-ps-vs-programmable-logic-pl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The TAP Controller State Machine
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The TAP Controller State Machine">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-navigating-to-shift-dr" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example: Navigating to Shift-DR
+        🧠 Processing System (PS) vs. 🚀 Programmable Logic (PL)
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#the-access-ports-aps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚪 The Access Ports (APs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-internal-buses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛣️ The Internal Buses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ahb-ap-vs-apb-a-quick-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📊 AHB-AP vs APB: A Quick Comparison
+      
+    </span>
+  </a>
   
 </li>
       
@@ -502,25 +532,88 @@
 
 
 
-<h1 id="jtag-protocol-basics">JTAG Protocol Basics</h1>
-<p>The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a hardware interface used for testing, verifying, and debugging printed circuit boards and integrated circuits. </p>
-<h2 id="the-4-wire-bus">The 4-Wire Bus</h2>
-<p>At its core, JTAG uses four mandatory pins:
-* <strong>TCK (Test Clock):</strong> Synchronizes the internal state machine operations.
-* <strong>TMS (Test Mode Select):</strong> Sampled on the rising edge of TCK to navigate the internal state machine.
-* <strong>TDI (Test Data In):</strong> Serial data shifted into the device.
-* <strong>TDO (Test Data Out):</strong> Serial data shifted out of the device.</p>
-<h2 id="the-tap-controller-state-machine">The TAP Controller State Machine</h2>
-<p>Every JTAG-compliant chip contains a 16-state finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> pin.</p>
-<p>Our controller in <code>jtag_controller.py</code> heavily relies on these specific states:</p>
+<h1 id="zynq-7000-debug-architecture-coresight-topology">Zynq-7000 Debug Architecture &amp; CoreSight Topology</h1>
+<p>This document provides a high-level overview of the ARM CoreSight debug infrastructure embedded within the Xilinx Zynq-7000 SoC. It illustrates how external JTAG commands are routed through the silicon to access internal memory, control processor execution, and interact with peripherals like the QSPI Flash.</p>
+<hr />
+<h2 id="system-topology-diagram">🗺️ System Topology Diagram</h2>
+<p>The following block diagram illustrates the data path from the host PC down to the internal components of the Zynq-7000 SoC.</p>
+<pre><code class="language-mermaid">flowchart TB
+  A[Computer / Python Tool] --&gt;|USB| B[FTDI Chip (MPSSE)]
+  B --&gt; C[Zynq-7000 SoC]
+  C --&gt; D[CoreSight DAP]
+  C --&gt; I[QSPI FLASH\n(External)]
+
+  subgraph DAP [CoreSight DAP]
+    E[DP\n(Debug Port)]
+    F[AHB-AP\nOCM RAM / System Memory]
+    G[APB-AP\nQSPI Controller / Debug Registers]
+    H[JTAG-AP\nFPGA / PL Fabric]
+  end
+
+  D --&gt; E
+  D --&gt; F
+  D --&gt; G
+  D --&gt; H
+</code></pre>
+<h2 id="processing-system-ps-vs-programmable-logic-pl">🧠 Processing System (PS) vs. 🚀 Programmable Logic (PL)</h2>
+<p>The Zynq architecture is strictly divided into two distinct domains. Understanding this boundary is crucial for low-level debugging:</p>
 <ul>
-<li><strong>Test-Logic-Reset (TLR):</strong> The safe/reset state. Holding TMS <code>HIGH</code> for 5 consecutive clock cycles guarantees a return to TLR from <em>any</em> state.</li>
-<li><strong>Run-Test/Idle:</strong> A resting state where the TAP is active but not shifting data.</li>
-<li><strong>Shift-IR (Instruction Register):</strong> Used to load a command (e.g., Target the FPGA Usercode or the ARM CoreSight DAP).</li>
-<li><strong>Shift-DR (Data Register):</strong> Used to read or write the actual data payload based on the active instruction.</li>
+<li><strong>Processing System (PS) — The Software Domain:</strong> 
+  The PS is the hard-silicon side of the Zynq, containing the dual-core ARM Cortex-A9 processors, system memories (OCM), and standard peripherals (like the QSPI Controller). Both the <strong>AHB-AP</strong> and <strong>APB-AP</strong> operate entirely within this boundary.</li>
+<li><strong>Programmable Logic (PL) — The Hardware/FPGA Domain:</strong> 
+  The PL is the reprogrammable FPGA fabric. Instead of exposing a separate physical JTAG port, ARM CoreSight embeds the <strong>JTAG-AP</strong>, which acts as an internal bridge to program the PL bitstream or perform Boundary Scans directly through the primary PS JTAG connection.</li>
 </ul>
-<h3 id="example-navigating-to-shift-dr">Example: Navigating to Shift-DR</h3>
-<p>To move from <code>Test-Logic-Reset</code> to <code>Shift-DR</code>, the TMS pin must receive the sequence <code>0 -&gt; 1 -&gt; 0 -&gt; 0</code>. In our code, this is handled transparently by the <code>_tms_to_shift_dr()</code> helper method.</p>
+<hr />
+<h2 id="the-access-ports-aps">🚪 The Access Ports (APs)</h2>
+<p>Within the CoreSight DAP, the Access Ports act as "gates" bridging the external JTAG interface to the internal hardware buses.</p>
+<ul>
+<li><strong>DP (Debug Port):</strong> The primary physical interface interacting with your JTAG wires. It exposes the Instruction Register (IR) and Data Register (DR) chains.</li>
+<li><strong>AHB-AP (Advanced High-performance Bus AP):</strong> Connects directly to the main system interconnect. It treats the entire memory map as raw addresses, allowing high-speed hardware-driven DMA injections (e.g., pushing the <code>fsbl.bin</code> into OCM RAM) without engaging the CPUs.</li>
+<li><strong>APB-AP (Advanced Peripheral Bus AP):</strong> Connects to the CoreSight private debug bus. It is strictly tasked with modifying the processor cores' execution state (Halt, Resume, Breakpoints) and altering memory-mapped peripheral configurations.</li>
+<li><strong>JTAG-AP:</strong> The internal bridge down to the Programmable Logic (PL) configuration logic.</li>
+</ul>
+<hr />
+<h2 id="the-internal-buses">🛣️ The Internal Buses</h2>
+<p>Once past the Access Ports, data travels across specific internal buses optimized for different workloads:</p>
+<ul>
+<li><strong>AHB / AXI Bus Matrix:</strong> The high-bandwidth backbone of the system. It links the processors, DDR controller, and OCM. This bus supports burst modes, enabling our tool's bulk transfer engine to bypass USB turnaround latency bottlenecks.</li>
+<li><strong>APB Debug Bus:</strong> A dedicated internal bus reserved strictly for debug components. The APB-AP uses this highway to read/write core registers when the Cortex-A9 is halted.</li>
+<li><strong>APB Peripheral Bus:</strong> A low-power, point-to-point peripheral bus for configuration registers. The QSPI Controller and SLCR (System Level Control Registers) hang off this bus. </li>
+</ul>
+<hr />
+<h2 id="ahb-ap-vs-apb-a-quick-comparison">📊 AHB-AP vs APB: A Quick Comparison</h2>
+<p>When interacting with the Zynq SoC via our Python tool, we constantly switch between these two domains depending on the task:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">AHB-AP (Access Port on AHB Bus)</th>
+<th style="text-align: left;">APB (Advanced Peripheral Bus)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Nature</strong></td>
+<td style="text-align: left;">Internal <strong>Debug Access Port</strong> inside the DAP.</td>
+<td style="text-align: left;">Physical <strong>Hardware Bus</strong> inside the chip.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Speed/Bandwidth</strong></td>
+<td style="text-align: left;">High speed (optimized for bulk memory transfers).</td>
+<td style="text-align: left;">Low speed (optimized for single-register control).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Primary Targets</strong></td>
+<td style="text-align: left;">On-Chip RAM (OCM), DDR, System Memory.</td>
+<td style="text-align: left;">QSPI Controller, SLCR Registers, Core Debuging.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Tool Usage</strong></td>
+<td style="text-align: left;">Used to inject the <code>fsbl.bin</code> firmware in fast burst blocks.</td>
+<td style="text-align: left;">Used to configure hardware registers and query the QSPI Flash JEDEC ID.</td>
+</tr>
+</tbody>
+</table>
 
 
 
