@@ -140,7 +140,7 @@ class JtagController:
         if not self.is_ready(): 
             print("JTAG is not open. Please open a connection first.")
             return
-        print(f"Targeting ARM -> Loading '{filepath}' into OCM...")
+        print(f"Targeting ARM AHB-AP -> Loading '{filepath}' into OCM...")
         
         try:
             with open(filepath, "rb") as f:
@@ -189,7 +189,7 @@ class JtagController:
             print("JTAG is not open. Please open a connection first.")
             return
             
-        print("Targeting QSPI Controller -> Reading Flash JEDEC ID...")
+        print("Targeting ARM AHB-AP -> QSPI Controller -> Reading Flash JEDEC ID...")
         self.device.purge(ftd.defines.PURGE_RX)
         self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
         self._init_ahb_ap()

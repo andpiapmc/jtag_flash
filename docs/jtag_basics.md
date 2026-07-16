@@ -4,6 +4,7 @@ The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a hardware interfac
 
 ## The 4-Wire Bus
 At its core, JTAG uses four mandatory pins:
+
 * **TCK (Test Clock):** Synchronizes the internal state machine operations.
 * **TMS (Test Mode Select):** Sampled on the rising edge of TCK to navigate the internal state machine.
 * **TDI (Test Data In):** Serial data shifted into the device.

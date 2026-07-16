@@ -39,3 +39,20 @@ This tool is specifically designed for **Windows** environments and requires ori
    ```bash
    git clone [https://github.com/your-username/jtag_flash.git](https://github.com/your-username/jtag_flash.git)
    cd jtag_flash
+   ```
+
+2. **Create and activate a Python virtual environment:**
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+3. **Install Python dependencies:**
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
+
+4. **Build or serve the documentation locally:**
+   ```powershell
+   python -m mkdocs serve
+   ```

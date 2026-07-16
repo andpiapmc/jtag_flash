@@ -39,7 +39,7 @@ This tool is specifically designed for **Windows** environments and requires ori
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/your-username/jtag_flash.git](https://github.com/your-username/jtag_flash.git)
+   git clone [https://github.com/andpiapmc/jtag_flash.git](https://github.com/andpiapmc/jtag_flash.git)
    cd jtag_flash
    ```
 
