@@ -463,33 +463,6 @@
   
 
     
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="arm_coresight/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    ARM Coresight
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
   </ul>
 </nav>
                   </div>
@@ -678,14 +651,14 @@ This project leverages the hardware MPSSE engine of FTDI chips (e.g., FT232H, us
 <ol>
 <li>
 <p><strong>Clone the repository:</strong>
-   <code>bash
-   git clone [https://github.com/andpiapmc/jtag_flash.git](https://github.com/andpiapmc/jtag_flash.git)
-   cd jtag_flash</code></p>
+   <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span><span class="o">[</span>https://github.com/andpiapmc/jtag_flash.git<span class="o">](</span>https://github.com/andpiapmc/jtag_flash.git<span class="o">)</span>
+<span class="nb">cd</span><span class="w"> </span>jtag_flash
+</code></pre></div></p>
 </li>
 <li>
 <p><strong>Install dependencies:</strong>
-   <code>bash
-   pip install ftd2xx</code></p>
+   <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>ftd2xx
+</code></pre></div></p>
 </li>
 </ol>
 <blockquote>
@@ -696,27 +669,27 @@ This project leverages the hardware MPSSE engine of FTDI chips (e.g., FT232H, us
 <ol>
 <li>
 <p><strong>Install MkDocs and the Material theme:</strong>
-   <code>bash
-   pip install mkdocs mkdocs-material</code></p>
+   <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>mkdocs<span class="w"> </span>mkdocs-material
+</code></pre></div></p>
 </li>
 <li>
 <p><strong>Start the live-reloading local server:</strong>
-   <code>bash
-   mkdocs serve</code></p>
+   <div class="highlight"><pre><span></span><code>mkdocs<span class="w"> </span>serve
+</code></pre></div></p>
 </li>
 <li>
 <p><strong>Open your browser and navigate to:</strong>
-   <code>text
-   [http://127.0.0.1:8000](http://127.0.0.1:8000)</code></p>
+   <div class="highlight"><pre><span></span><code>[http://127.0.0.1:8000](http://127.0.0.1:8000)
+</code></pre></div></p>
 </li>
 </ol>
 <h2 id="usage">🖥 Usage</h2>
 <p>Ensure your Zynq board is powered on and the JTAG cable is connected. For FSBL injection, place your <code>fsbl.bin</code> file in the root folder of the script.
 Launch the interactive interface:</p>
-<pre><code class="language-bash">python main.py
-</code></pre>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>main.py
+</code></pre></div>
 <p>You will be presented with the following menu:</p>
-<pre><code class="language-text">----------------------------------------
+<div class="highlight"><pre><span></span><code>----------------------------------------
 0. Exit
 1. List FTDI devices
 2. Open JTAG
@@ -729,7 +702,7 @@ Launch the interactive interface:</p>
 9. Read QSPI JEDEC ID
 ?. Help
 ----------------------------------------
-</code></pre>
+</code></pre></div>
 <h3 id="typical-workflow">Typical Workflow:</h3>
 <ol>
 <li>Press <code>1</code> to verify the FTDI probe is detected.</li>

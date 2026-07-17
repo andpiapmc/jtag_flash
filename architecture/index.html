@@ -426,33 +426,6 @@
   
 
     
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../arm_coresight/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    ARM Coresight
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
   </ul>
 </nav>
                   </div>
@@ -573,41 +546,41 @@
 <p>To prevent this and eliminate cryptic "magic numbers", the project is divided into three distinct layers.</p>
 <hr />
 <h2 id="1-the-hardware-vocabulary-zynq_constantspy">1. The Hardware Vocabulary (<code>zynq_constants.py</code>)</h2>
-<p>This module acts as the definitive dictionary for the entire project. It contains absolutely <strong>zero execution logic</strong>. Instead, it maps all the physical and logical constants required to speak with the hardware.</p>
+<p>This module acts as the definitive dictionary for the entire project. It contains absolutely <strong>zero execution logic</strong> and only maps the physical and logical constants required to drive the hardware.</p>
 <p>Key components include:
-- <strong><code>MpsseOpcodes</code></strong>: Maps FTDI-specific byte commands used to configure the engine and shift data (e.g., <code>SHIFT_TMS_NO_READ</code>).
-- <strong><code>JtagInstr</code></strong>: Standard JTAG Instruction Register (IR) values to target either the FPGA boundary scan or the ARM CoreSight DAP.
-- <strong><code>CoreSightRegs</code></strong> &amp; <strong><code>DapReq</code></strong>: The structural layout and bitmasks for the ARM Debug Port (DP) and Access Port (AP).
-- <strong><code>AhbApRegs</code></strong> &amp; <strong><code>ZynqRegs</code></strong>: Memory map addresses for the internal Zynq buses (SLCR, OCM, QSPI Controller).
-- <strong><code>FLASH_MANUFACTURERS</code></strong> &amp; <strong><code>FLASH_MEMORY_TYPES</code></strong>: Decoding dictionaries mapping raw JEDEC hex values to human-readable SPI Flash information.</p>
-<p>By isolating these constants, the core logic remains clean, self-documenting, and safe from typo-induced hardware crashes.</p>
+- <strong><code>MpsseOpcodes</code></strong>: FTDI-specific byte commands used to configure the engine and shift data.
+- <strong><code>JtagInstr</code></strong>: JTAG Instruction Register values that select the FPGA boundary scan or the ARM CoreSight DAP.
+- <strong><code>CoreSightRegs</code></strong> and <strong><code>DapReq</code></strong>: Debug Port and Access Port register layouts, bitmasks, and transaction formats.
+- <strong><code>AhbApRegs</code></strong> and <strong><code>ZynqRegs</code></strong>: Memory map addresses for Zynq internal buses and peripherals, including SLCR, OCM, and the QSPI controller.
+- <strong><code>FLASH_MANUFACTURERS</code></strong> and <strong><code>FLASH_MEMORY_TYPES</code></strong>: JEDEC decoder dictionaries for SPI flash identification.</p>
+<p>This separation keeps the core logic clean, self-documenting, and safe from typo-induced hardware crashes.</p>
 <hr />
 <h2 id="2-the-core-engine-jtag_controllerpy">2. The Core Engine (<code>jtag_controller.py</code>)</h2>
-<p>This is the workhorse of the tool. The <code>JtagController</code> class is structured hierarchically, from high-level workflows down to atomic hardware transitions. It imports the vocabulary from <code>zynq_constants.py</code> and uses the <code>ftd2xx</code> wrapper to talk to the USB endpoint.</p>
+<p><code>JtagController</code> is the workhorse of the tool. It is built in layers that descend from user workflows to raw JTAG bit-banging.</p>
 <h3 id="internal-abstraction-layers">Internal Abstraction Layers</h3>
 <ul>
-<li><strong>Public API (Workflows)</strong>: Methods like <code>run_fsbl_bin()</code> or <code>read_qspi_jedec_id()</code>. These are the macros called by the user, and they orchestrate complex sequences of hardware operations.</li>
-<li><strong>Intermediate API (CoreSight)</strong>: Methods like <code>test_arm_dap()</code> or <code>write_mem32()</code>. These handle the ARM-specific Debug Access Port protocol, routing 32-bit reads/writes over the internal AHB bus.</li>
-<li><strong>Atomic API (JTAG &amp; MPSSE)</strong>: Private methods like <code>_shift_dr()</code>, <code>_shift_ir()</code>, and <code>_tms_to_shift_dr()</code>. These methods care only about shifting bits and bytes over the physical JTAG lines (TMS, TDI, TDO) according to the IEEE 1149.1 state machine.</li>
+<li><strong>Public API (Workflows)</strong>: methods such as <code>run_fsbl_bin()</code> and <code>read_qspi_jedec_id()</code>. These orchestrate complete operations for the user.</li>
+<li><strong>Intermediate API (CoreSight)</strong>: methods such as <code>test_arm_dap()</code> and <code>write_mem32()</code>. These handle ARM DAP transactions and route 32-bit accesses over the internal AHB bus.</li>
+<li><strong>Atomic API (JTAG &amp; MPSSE)</strong>: private methods such as <code>_shift_dr()</code>, <code>_shift_ir()</code>, and <code>_tms_to_shift_dr()</code>. These only care about shifting bits on the physical JTAG lines (TMS/TDI/TDO) according to the IEEE 1149.1 TAP state machine.</li>
 </ul>
 <h3 id="the-bulk-engine">The Bulk Engine</h3>
-<p>A critical feature of the controller is the <code>_write_mem32_bulk()</code> method. Instead of waiting for a USB acknowledgment after every single memory write, it concatenates hundreds of AHB-AP transactions into a massive MPSSE bytearray payload. This completely bypasses the USB 1ms latency bottleneck, allowing the OCM SRAM to be flooded with the FSBL binary in fractions of a second.</p>
+<p>A critical feature is <code>_write_mem32_bulk()</code>. Instead of waiting for a USB acknowledgment on every memory write, it concatenates many AHB-AP transactions into a single MPSSE payload. This reduces USB latency and lets the OCM SRAM be flooded with the FSBL binary in a fraction of the time.</p>
 <hr />
 <h2 id="3-the-user-interface-mainpy">3. The User Interface (<code>main.py</code>)</h2>
-<p>The entry point of the tool is kept intentionally minimalistic. It handles:
-- printing the Command Line Interface (CLI) menu.
-- capturing standard user input (<code>stdin</code>).
-- routing choices (<code>match/case</code>) to the appropriate public methods of the <code>JtagController</code> instance.
-- safe exit handling, ensuring that if a user aborts (<code>Ctrl+C</code>), the FTDI connection is cleanly closed to prevent port locking.</p>
+<p>The application entry point is intentionally lightweight. It performs:
+- CLI menu display.
+- standard input capture (<code>stdin</code>).
+- routing of user choices via <code>match/case</code> to <code>JtagController</code> methods.
+- safe cleanup when users abort (<code>Ctrl+C</code>), closing the FTDI connection and avoiding port locking.</p>
 <hr />
 <h2 id="data-flow-summary">Data Flow Summary</h2>
-<p>When a user requests to load the FSBL, the data flows downward through the layers:</p>
+<p>When the user requests FSBL loading, the flow is:</p>
 <ol>
 <li><strong><code>main.py</code></strong> calls <code>jtag.run_fsbl_bin()</code>.</li>
-<li><strong><code>jtag_controller.py</code></strong> reads the binary file, issues CoreSight halts/resets (<code>_init_ahb_ap</code>), and passes chunks of words to the bulk engine.</li>
-<li>The bulk engine translates these words into DAP requests using definitions from <strong><code>zynq_constants.py</code></strong>.</li>
-<li>The atomic JTAG methods wrap these DAP requests into MPSSE opcodes.</li>
-<li>The <code>ftd2xx</code> driver sends the final byte stream to the physical USB hardware.</li>
+<li><strong><code>jtag_controller.py</code></strong> reads the binary, halts/reset the target via CoreSight, and breaks the data into word chunks.</li>
+<li>The bulk engine converts those words into DAP requests using constants from <strong><code>zynq_constants.py</code></strong>.</li>
+<li>The atomic JTAG layer wraps DAP requests into MPSSE opcodes.</li>
+<li>The <code>ftd2xx</code> driver sends the final byte stream to the USB-attached FTDI hardware.</li>
 </ol>
 
 

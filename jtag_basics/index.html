@@ -393,33 +393,6 @@
   
 
     
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../arm_coresight/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    ARM Coresight
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
   </ul>
 </nav>
                   </div>
@@ -505,11 +478,13 @@
 <h1 id="jtag-protocol-basics">JTAG Protocol Basics</h1>
 <p>The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a hardware interface used for testing, verifying, and debugging printed circuit boards and integrated circuits. </p>
 <h2 id="the-4-wire-bus">The 4-Wire Bus</h2>
-<p>At its core, JTAG uses four mandatory pins:
-* <strong>TCK (Test Clock):</strong> Synchronizes the internal state machine operations.
-* <strong>TMS (Test Mode Select):</strong> Sampled on the rising edge of TCK to navigate the internal state machine.
-* <strong>TDI (Test Data In):</strong> Serial data shifted into the device.
-* <strong>TDO (Test Data Out):</strong> Serial data shifted out of the device.</p>
+<p>At its core, JTAG uses four mandatory pins:</p>
+<ul>
+<li><strong>TCK (Test Clock):</strong> Synchronizes the internal state machine operations.</li>
+<li><strong>TMS (Test Mode Select):</strong> Sampled on the rising edge of TCK to navigate the internal state machine.</li>
+<li><strong>TDI (Test Data In):</strong> Serial data shifted into the device.</li>
+<li><strong>TDO (Test Data Out):</strong> Serial data shifted out of the device.</li>
+</ul>
 <h2 id="the-tap-controller-state-machine">The TAP Controller State Machine</h2>
 <p>Every JTAG-compliant chip contains a 16-state finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> pin.</p>
 <p>Our controller in <code>jtag_controller.py</code> heavily relies on these specific states:</p>
