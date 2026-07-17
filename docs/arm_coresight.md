@@ -96,9 +96,9 @@ Once past the Access Ports, data travels across specific internal buses optimize
 
 ---
 
-| Feature | AHB-AP (Access Port on AHB Bus) | APB (Advanced Peripheral Bus) |
+| Feature | AHB-AP (Access Port on AHB Bus) | APB-AP (Access Port on APB Bus) |
 | :--- | :--- | :--- |
-| **Nature** | Internal **Debug Access Port** inside the DAP. | Physical **Hardware Bus** inside the chip. |
+| **Nature** | Internal **Debug Access Port** inside the DAP. | Internal **Debug Access Port** inside the DAP. |
 | **Speed/Bandwidth** | High speed (optimized for bulk memory transfers). | Low speed (optimized for single-register control). |
-| **Primary Targets** | On-Chip RAM (OCM), DDR, System Memory. | QSPI Controller, SLCR Registers, Core Debuging. |
+| **Primary Targets** | On-Chip RAM (OCM), DDR, System Memory. | QSPI Controller, SLCR Registers, Core Debugging. |
 | **Tool Usage** | Used to inject the `fsbl.bin` firmware in fast burst blocks. | Used to configure hardware registers and query the QSPI Flash JEDEC ID. |

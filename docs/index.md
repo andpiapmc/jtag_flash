@@ -39,7 +39,7 @@ This tool is specifically designed for **Windows** environments and requires ori
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/andpiapmc/jtag_flash.git](https://github.com/andpiapmc/jtag_flash.git)
+   git clone https://github.com/andpiapmc/jtag_flash.git
    cd jtag_flash
    ```
 
@@ -66,7 +66,7 @@ This documentation site is compiled using **MkDocs** with the **Material** theme
 
 3. **Open your browser and navigate to:**
    ```text
-   [http://127.0.0.1:8000](http://127.0.0.1:8000)
+   http://127.0.0.1:8000
    ```
 
 ## 🖥 Usage
