@@ -8,6 +8,7 @@ theme:
 
 plugins:
   - search
+  - mkdocstrings
 
 markdown_extensions:
   - admonition
@@ -27,3 +28,5 @@ nav:
   - JTAG Protocol Basics: jtag_basics.md
   - FTDI MPSSE Engine: mpsse_protocol.md
   - ARM Coresight: arm_coresight.md
+  - FSBL Injection: fsbl_injection.md
+  - API Reference: api_reference.md
