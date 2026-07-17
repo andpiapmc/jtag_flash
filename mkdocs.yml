@@ -11,10 +11,19 @@ plugins:
 
 markdown_extensions:
   - admonition
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - js/mermaid-init.js
 
 nav:
   - Home: index.md
   - Project Architecture: architecture.md
   - JTAG Protocol Basics: jtag_basics.md
   - FTDI MPSSE Engine: mpsse_protocol.md
+  - ARM Coresight: arm_coresight.md
