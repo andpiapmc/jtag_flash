@@ -11,24 +11,28 @@
       
       
       
+        <link rel="prev" href="../arm_coresight/">
+      
+      
+        <link rel="next" href="../api_reference/">
       
       
         
       
       
-      <link rel="icon" href="/assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Zynq-7000 JTAG Tool</title>
+        <title>FSBL Injection - Zynq-7000 JTAG Tool</title>
       
     
     
-      <link rel="stylesheet" href="/assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="/assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +51,9 @@
       
     
     
-      <link rel="stylesheet" href="/assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("/",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -71,6 +75,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#the-magic-of-fsbl-injection" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -83,7 +92,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/." title="Zynq-7000 JTAG Tool" class="md-header__button md-logo" aria-label="Zynq-7000 JTAG Tool" data-md-component="logo">
+    <a href=".." title="Zynq-7000 JTAG Tool" class="md-header__button md-logo" aria-label="Zynq-7000 JTAG Tool" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -103,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              FSBL Injection
             
           </span>
         </div>
@@ -181,7 +190,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/." title="Zynq-7000 JTAG Tool" class="md-nav__button md-logo" aria-label="Zynq-7000 JTAG Tool" data-md-component="logo">
+    <a href=".." title="Zynq-7000 JTAG Tool" class="md-nav__button md-logo" aria-label="Zynq-7000 JTAG Tool" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -199,7 +208,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -226,7 +235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -253,7 +262,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/jtag_basics/" class="md-nav__link">
+      <a href="../jtag_basics/" class="md-nav__link">
         
   
   
@@ -280,7 +289,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mpsse_protocol/" class="md-nav__link">
+      <a href="../mpsse_protocol/" class="md-nav__link">
         
   
   
@@ -307,7 +316,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/arm_coresight/" class="md-nav__link">
+      <a href="../arm_coresight/" class="md-nav__link">
         
   
   
@@ -331,10 +340,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="/fsbl_injection/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSBL Injection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -350,6 +386,48 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-injection-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛠️ The Injection Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequence-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⏱️ Sequence Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -361,7 +439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api_reference/" class="md-nav__link">
+      <a href="../api_reference/" class="md-nav__link">
         
   
   
@@ -398,6 +476,38 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-injection-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛠️ The Injection Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequence-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⏱️ Sequence Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -410,8 +520,69 @@
               
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+
+<h1 id="the-magic-of-fsbl-injection">The Magic of FSBL Injection</h1>
+<p>One of the most powerful features of this tool is the ability to inject and execute a <strong>First Stage Boot Loader (FSBL)</strong> directly into the Zynq's internal memory via JTAG. This completely bypasses the standard boot sequence (e.g., booting from an SD card or QSPI Flash), which is incredibly useful for "unbricking" boards or debugging early-stage hardware bring-up.</p>
+<p>This process involves carefully orchestrating the CoreSight Debug Access Port (DAP) to take control of the main CPU, alter its memory, and force it to execute our code.</p>
+<hr />
+<h2 id="the-injection-sequence">🛠️ The Injection Sequence</h2>
+<p>Here is the exact sequence of low-level operations performed by the <code>jtag_controller.py</code> engine:</p>
+<ol>
+<li><strong>Halt the Processor:</strong> Through the <strong>APB-AP</strong>, we write to the ARM CoreSight debug registers to abruptly halt the execution of the Cortex-A9 Core 0.</li>
+<li><strong>Unlock the SLCR:</strong> The System Level Control Registers (SLCR) are protected to prevent accidental writes. We send a specific magic key to the SLCR unlock register to gain access to the clock and reset controls.</li>
+<li><strong>Bulk Write to OCM:</strong> Using the high-speed <strong>AHB-AP</strong>, we bypass the CPU and use hardware DMA to stream the <code>fsbl.bin</code> file directly into the <strong>On-Chip Memory (OCM)</strong>, usually starting at address <code>0x00000000</code>.</li>
+<li><strong>Hijack the Program Counter (PC):</strong> We write back to the Cortex-A9 debug registers (via APB-AP) to forcefully change the CPU's Program Counter (R15) to point to the starting address of our newly injected FSBL in the OCM.</li>
+<li><strong>Resume Execution:</strong> Finally, we release the Halt state. The CPU wakes up, fetches the next instruction from the modified Program Counter, and natively boots our FSBL.</li>
+</ol>
+<hr />
+<h2 id="sequence-diagram">⏱️ Sequence Diagram</h2>
+<p>The following diagram illustrates the interaction between the host PC, the JTAG Access Ports, and the Zynq hardware domains during the injection process.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant PC as Host Tool
+    participant APB as APB-AP (Debug/Ctrl)
+    participant AHB as AHB-AP (Memory)
+    participant Core as Cortex-A9 CPU
+    participant RAM as OCM RAM
+
+    Note over PC, RAM: 1. Taking Control
+    PC-&gt;&gt;APB: Send Halt Command
+    APB-&gt;&gt;Core: Trigger Debug Halt
+    Core--&gt;&gt;PC: Acknowledge Halt State
+
+    Note over PC, RAM: 2. Unlocking Hardware
+    PC-&gt;&gt;APB: Write SLCR Unlock Key
+    APB-&gt;&gt;Core: Disable Register Protection
+
+    Note over PC, RAM: 3. Payload Injection
+    PC-&gt;&gt;AHB: Stream fsbl.bin (Burst Mode)
+    AHB-&gt;&gt;RAM: Write executable bytes to 0x00000000
+    RAM--&gt;&gt;PC: Write Complete
+
+    Note over PC, RAM: 4. Execution Hijack
+    PC-&gt;&gt;APB: Set Program Counter = 0x00000000
+    APB-&gt;&gt;Core: Update R15 (PC) Register
+
+    Note over PC, RAM: 5. Boot
+    PC-&gt;&gt;APB: Send Resume Command
+    APB-&gt;&gt;Core: Release Debug Halt
+    Core-&gt;&gt;RAM: Fetch Instruction at 0x00000000
+    Note over Core: FSBL is now running!</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -448,14 +619,14 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "/", "features": [], "search": "/assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="/assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
       
-        <script src="/js/mermaid-init.js"></script>
+        <script src="../js/mermaid-init.js"></script>
       
     
   </body>
