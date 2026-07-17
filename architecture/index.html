@@ -547,12 +547,14 @@
 <hr />
 <h2 id="1-the-hardware-vocabulary-zynq_constantspy">1. The Hardware Vocabulary (<code>zynq_constants.py</code>)</h2>
 <p>This module acts as the definitive dictionary for the entire project. It contains absolutely <strong>zero execution logic</strong> and only maps the physical and logical constants required to drive the hardware.</p>
-<p>Key components include:
-- <strong><code>MpsseOpcodes</code></strong>: FTDI-specific byte commands used to configure the engine and shift data.
-- <strong><code>JtagInstr</code></strong>: JTAG Instruction Register values that select the FPGA boundary scan or the ARM CoreSight DAP.
-- <strong><code>CoreSightRegs</code></strong> and <strong><code>DapReq</code></strong>: Debug Port and Access Port register layouts, bitmasks, and transaction formats.
-- <strong><code>AhbApRegs</code></strong> and <strong><code>ZynqRegs</code></strong>: Memory map addresses for Zynq internal buses and peripherals, including SLCR, OCM, and the QSPI controller.
-- <strong><code>FLASH_MANUFACTURERS</code></strong> and <strong><code>FLASH_MEMORY_TYPES</code></strong>: JEDEC decoder dictionaries for SPI flash identification.</p>
+<p>Key components include:</p>
+<ul>
+<li><strong><code>MpsseOpcodes</code></strong>: FTDI-specific byte commands used to configure the engine and shift data.</li>
+<li><strong><code>JtagInstr</code></strong>: JTAG Instruction Register values that select the FPGA boundary scan or the ARM CoreSight DAP.</li>
+<li><strong><code>CoreSightRegs</code></strong> and <strong><code>DapReq</code></strong>: Debug Port and Access Port register layouts, bitmasks, and transaction formats.</li>
+<li><strong><code>AhbApRegs</code></strong> and <strong><code>ZynqRegs</code></strong>: Memory map addresses for Zynq internal buses and peripherals, including SLCR, OCM, and the QSPI controller.</li>
+<li><strong><code>FLASH_MANUFACTURERS</code></strong> and <strong><code>FLASH_MEMORY_TYPES</code></strong>: JEDEC decoder dictionaries for SPI flash identification.</li>
+</ul>
 <p>This separation keeps the core logic clean, self-documenting, and safe from typo-induced hardware crashes.</p>
 <hr />
 <h2 id="2-the-core-engine-jtag_controllerpy">2. The Core Engine (<code>jtag_controller.py</code>)</h2>
@@ -567,11 +569,13 @@
 <p>A critical feature is <code>_write_mem32_bulk()</code>. Instead of waiting for a USB acknowledgment on every memory write, it concatenates many AHB-AP transactions into a single MPSSE payload. This reduces USB latency and lets the OCM SRAM be flooded with the FSBL binary in a fraction of the time.</p>
 <hr />
 <h2 id="3-the-user-interface-mainpy">3. The User Interface (<code>main.py</code>)</h2>
-<p>The application entry point is intentionally lightweight. It performs:
-- CLI menu display.
-- standard input capture (<code>stdin</code>).
-- routing of user choices via <code>match/case</code> to <code>JtagController</code> methods.
-- safe cleanup when users abort (<code>Ctrl+C</code>), closing the FTDI connection and avoiding port locking.</p>
+<p>The application entry point is intentionally lightweight. It performs:</p>
+<ul>
+<li>CLI menu display.</li>
+<li>standard input capture (<code>stdin</code>).</li>
+<li>routing of user choices via <code>match/case</code> to <code>JtagController</code> methods.</li>
+<li>safe cleanup when users abort (<code>Ctrl+C</code>), closing the FTDI connection and avoiding port locking.</li>
+</ul>
 <hr />
 <h2 id="data-flow-summary">Data Flow Summary</h2>
 <p>When the user requests FSBL loading, the flow is:</p>
