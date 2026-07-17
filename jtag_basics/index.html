@@ -343,6 +343,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#global-controller-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Controller States
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-selection-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path Selection States
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#instruction-register-ir-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instruction Register (IR) Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-register-dr-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Register (DR) Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example-navigating-to-shift-dr" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -443,6 +487,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#global-controller-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Controller States
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-selection-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path Selection States
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#instruction-register-ir-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instruction Register (IR) Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-register-dr-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Register (DR) Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example-navigating-to-shift-dr" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -486,13 +574,46 @@
 <li><strong>TDO (Test Data Out):</strong> Serial data shifted out of the device.</li>
 </ul>
 <h2 id="the-tap-controller-state-machine">The TAP Controller State Machine</h2>
-<p>Every JTAG-compliant chip contains a 16-state finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> pin.</p>
+<p>Every JTAG-compliant chip contains a 16-state finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> (Test Mode Select) signal and occur strictly on the rising edge of the <code>TCK</code> (Test Clock) signal.</p>
 <p>Our controller in <code>jtag_controller.py</code> heavily relies on these specific states:</p>
 <ul>
 <li><strong>Test-Logic-Reset (TLR):</strong> The safe/reset state. Holding TMS <code>HIGH</code> for 5 consecutive clock cycles guarantees a return to TLR from <em>any</em> state.</li>
 <li><strong>Run-Test/Idle:</strong> A resting state where the TAP is active but not shifting data.</li>
 <li><strong>Shift-IR (Instruction Register):</strong> Used to load a command (e.g., Target the FPGA Usercode or the ARM CoreSight DAP).</li>
 <li><strong>Shift-DR (Data Register):</strong> Used to read or write the actual data payload based on the active instruction.</li>
+</ul>
+<p><img alt="TAP Controller FSM" src="../tap_controller_fsm.png" /></p>
+<p>As shown in the diagram, the FSM is split into two nearly identical vertical branches:</p>
+<ul>
+<li><strong>Instruction Path (IR):</strong> States ending in "-IR". Used to shift control commands into the instruction register.</li>
+<li><strong>Data Path (DR):</strong> States ending in "-DR". Used to read from or write to the specific data register targeted by the active instruction.</li>
+</ul>
+<h3 id="global-controller-states">Global Controller States</h3>
+<ul>
+<li><strong>Test-Logic-Reset:</strong> All test logic is disabled in this state, allowing the IC to operate normally. The FSM is designed so that this state can always be reached from <em>any</em> current state by holding <code>TMS</code> high and pulsing <code>TCK</code> five times. Because of this built-in fail-safe, a physical Test Reset (<code>TRST</code>) pin is optional.</li>
+<li><strong>Run-Test/Idle:</strong> The controller waits here. Test logic in the IC is idle unless a specifically activated instruction (such as a built-in self-test) dictates execution while in this state.</li>
+</ul>
+<h3 id="path-selection-states">Path Selection States</h3>
+<ul>
+<li><strong>Select-DR-Scan:</strong> A temporary decision state that controls whether the FSM will enter the Data Path or proceed to check the Instruction Path.</li>
+<li><strong>Select-IR-Scan:</strong> Controls whether the FSM will enter the Instruction Path or return to the <code>Test-Logic-Reset</code> state.</li>
+</ul>
+<h3 id="instruction-register-ir-path">Instruction Register (IR) Path</h3>
+<ul>
+<li><strong>Capture-IR:</strong> On the rising edge of <code>TCK</code>, a fixed pattern of values is parallel-loaded into the shift register bank of the Instruction Register. By JTAG standard, the two least significant bits are always loaded as <code>01</code>.</li>
+<li><strong>Shift-IR:</strong> The instruction register is connected serially between the <code>TDI</code> (input) and <code>TDO</code> (output) pins. The captured pattern shifts out on each rising edge of <code>TCK</code>, while the new instruction available on the <code>TDI</code> pin simultaneously shifts in.</li>
+<li><strong>Exit1-IR:</strong> A decision state to either enter <code>Pause-IR</code> or proceed directly to <code>Update-IR</code>.</li>
+<li><strong>Pause-IR:</strong> Allows the shifting process of the instruction register to be temporarily halted without losing data.</li>
+<li><strong>Exit2-IR:</strong> Controls whether to return to <code>Shift-IR</code> to resume shifting or proceed to <code>Update-IR</code>.</li>
+<li><strong>Update-IR:</strong> On every <em>falling</em> edge of <code>TCK</code>, the new instruction is latched into the Instruction Register's latch bank. Once latched, it immediately becomes the active/current instruction.</li>
+</ul>
+<h3 id="data-register-dr-path">Data Register (DR) Path</h3>
+<p>The Data Path mirrors the structural flow of the Instruction Path, but it operates on the hardware data register that was selected by the current instruction.</p>
+<ul>
+<li><strong>Capture-DR:</strong> Hardware data is parallel-loaded into the currently selected data register on the rising edge of <code>TCK</code>.</li>
+<li><strong>Shift-DR:</strong> Connects the selected data register between <code>TDI</code> and <code>TDO</code> to shift data in and out.</li>
+<li><strong>Exit1-DR / Pause-DR / Exit2-DR:</strong> Function exactly like their IR counterparts, managing the halting, holding, and resuming of data shifting.</li>
+<li><strong>Update-DR:</strong> Latches the newly shifted data into the target hardware register.</li>
 </ul>
 <h3 id="example-navigating-to-shift-dr">Example: Navigating to Shift-DR</h3>
 <p>To move from <code>Test-Logic-Reset</code> to <code>Shift-DR</code>, the TMS pin must receive the sequence <code>0 -&gt; 1 -&gt; 0 -&gt; 0</code>. In our code, this is handled transparently by the <code>_tms_to_shift_dr()</code> helper method.</p>
