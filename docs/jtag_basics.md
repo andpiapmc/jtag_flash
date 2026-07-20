@@ -1,17 +1,16 @@
 # JTAG Protocol Basics
+The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a synchronous serial interface used for testing, verifying, and debugging printed circuit boards and integrated circuits (even in daisy chain configuration). 
 
-The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a hardware interface used for testing, verifying, and debugging printed circuit boards and integrated circuits. 
-
-## The 4-Wire Bus
+## The 4-Wire Bus Interface
 At its core, JTAG uses four mandatory pins:
 
 * **TCK (Test Clock):** Synchronizes the internal state machine operations.
-* **TMS (Test Mode Select):** Sampled on the rising edge of TCK to navigate the internal state machine.
+* **TMS (Test Mode Select):** Sampled on the rising edge of TCK to navigate the internal state machine (TAP Controller).
 * **TDI (Test Data In):** Serial data shifted into the device.
 * **TDO (Test Data Out):** Serial data shifted out of the device.
 
 ## The TAP Controller State Machine
-Every JTAG-compliant chip contains a 16-state finite state machine called the **Test Access Port (TAP) Controller**. Navigation through these states is controlled entirely by the sequence of `1`s and `0`s sent over the **TMS** (Test Mode Select) signal and occur strictly on the rising edge of the `TCK` (Test Clock) signal.
+Every JTAG-compliant chip contains a 16-states finite state machine called the **Test Access Port (TAP) Controller**. Navigation through these states is controlled entirely by the sequence of `1`s and `0`s sent over the **TMS** (Test Mode Select) signal and occur strictly on the rising edge of the `TCK` (Test Clock) signal.
 
 Our controller in `jtag_controller.py` heavily relies on these specific states:
 
@@ -26,6 +25,10 @@ As shown in the diagram, the FSM is split into two nearly identical vertical bra
 
 *   **Instruction Path (IR):** States ending in "-IR". Used to shift control commands into the instruction register.
 *   **Data Path (DR):** States ending in "-DR". Used to read from or write to the specific data register targeted by the active instruction.
+
+### Serial Shifting (Shift-IR / Shift-DR)
+
+During `Shift-IR` or `Shift-DR` the TAP shifts one bit per `TCK` rising edge: the controller drives the next bit on `TDI` which is sampled on that rising edge, while the device presents the bit shifted out on `TDO` (so you receive one output bit per clock as well). To shift an N‑bit value keep `TMS = 0` and toggle `TCK` for the first N−1 bits, then set `TMS = 1` on the final clock to exit the shift state and move to `Exit1-DR`/`Exit1-IR` as required.
 
 ### Global Controller States
 

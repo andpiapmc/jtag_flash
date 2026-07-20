@@ -68,7 +68,7 @@ Note: Exact opcode values, bit order, and length formats are documented in the F
 	- Use bit-oriented commands (`0x3B`) for the final 1–7 bits and to set the TMS bit that exits the shift state.
 - Termination: The last bit that sets TMS high to leave Shift-DR/IR is typically transmitted with a bit-wise command to ensure correct TAP state transition.
 
-## Example sequences (illustrative)
+## Example sequences
 
 These examples illustrate the format of MPSSE command buffers. Exact opcode values, bit order, and length semantics depend on the FTDI chip and driver; consult the FTDI documentation for your device.
 
@@ -119,7 +119,7 @@ Notes:
 	- `0x3B, <bits-1>, <final_bits_payload>`
 - Optionally follow with a TMS sequence to move to Run-Test/Idle.
 
-## Bulk write optimization (practical speed trick)
+## Bulk write optimization
 
 - For large memory writes (for example, writing an FSBL or bulk RAM loading), the host can pack hundreds or thousands of JTAG transactions into a single Python `bytearray` (or similar) and send it in large USB bulk writes (typical practice: chunk sizes tuned to device/driver limits, e.g., 64 KB chunks).
 - This reduces USB overhead and maximizes the rate at which the FTDI MPSSE can toggle the JTAG pins and accept transactions.
@@ -132,20 +132,4 @@ Notes:
 - Alignment: Prefer byte-aligned transfers when possible; use bit commands only for final alignment or to flip TMS.
 - Pin mapping: The JTAG signals (TCK/TMS/TDI/TDO/TRST/SRST) are mapped to specific FTDI ADBUS/ACBUS pins — ensure the software configures directions and optional pull-ups correctly.
 - Timing: MPSSE provides accurate internal timing for the clocks it generates, but USB still determines the latency between command submissions. MPSSE trades latency for aggregate throughput.
-
-## Debugging tips
-
-- Log raw MPSSE commands (hex) sent and the raw read buffers returned; compare expected vs. actual TDO sequences.
-- Test small state transitions first: verify a TMS-only sequence moves the TAP to the expected state before streaming large data transfers.
-- Use known JTAG test patterns (e.g., IDCODE read) to validate the whole path (host → USB → MPSSE → target).
-
-## Integration notes
-
-- Libraries: Common user-space libraries/drivers that expose MPSSE functionality include `pyftdi`, `libftdi` and FTDI’s D2XX driver bindings. They provide `write()`/`read()` operations to move raw MPSSE buffers.
-- Implementation strategy: Construct command buffers on the host, send with a single `write()` per chunk, then `read()` expected TDO bytes. Keep buffer construction deterministic and minimize per-transfer syscalls.
-
-## References
-
-- Project opcode mapping: `zynq_constants.py`  
-- FTDI MPSSE Application Note and FTDI device datasheets (refer to the datasheet for exact opcode encodings and device limits).
 
