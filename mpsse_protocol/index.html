@@ -404,10 +404,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#example-sequences-illustrative" class="md-nav__link">
+  <a href="#example-sequences" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example sequences (illustrative)
+        Example sequences
       
     </span>
   </a>
@@ -415,10 +415,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#bulk-write-optimization-practical-speed-trick" class="md-nav__link">
+  <a href="#bulk-write-optimization" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bulk write optimization (practical speed trick)
+        Bulk write optimization
       
     </span>
   </a>
@@ -430,39 +430,6 @@
     <span class="md-ellipsis">
       
         Practical considerations and caveats
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#debugging-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Debugging tips
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        References
       
     </span>
   </a>
@@ -640,10 +607,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#example-sequences-illustrative" class="md-nav__link">
+  <a href="#example-sequences" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example sequences (illustrative)
+        Example sequences
       
     </span>
   </a>
@@ -651,10 +618,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#bulk-write-optimization-practical-speed-trick" class="md-nav__link">
+  <a href="#bulk-write-optimization" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bulk write optimization (practical speed trick)
+        Bulk write optimization
       
     </span>
   </a>
@@ -666,39 +633,6 @@
     <span class="md-ellipsis">
       
         Practical considerations and caveats
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#debugging-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Debugging tips
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        References
       
     </span>
   </a>
@@ -796,7 +730,7 @@ MpsseOpcodes.SEND_IMMEDIATE      = 0x87
 </li>
 <li>Termination: The last bit that sets TMS high to leave Shift-DR/IR is typically transmitted with a bit-wise command to ensure correct TAP state transition.</li>
 </ul>
-<h2 id="example-sequences-illustrative">Example sequences (illustrative)</h2>
+<h2 id="example-sequences">Example sequences</h2>
 <p>These examples illustrate the format of MPSSE command buffers. Exact opcode values, bit order, and length semantics depend on the FTDI chip and driver; consult the FTDI documentation for your device.</p>
 <p>1) TMS-only example — send 10 TMS bits (packed LSB-first) with <code>MpsseOpcodes.SHIFT_TMS_NO_READ</code> (0x4B):</p>
 <div class="highlight"><pre><span></span><code>0x4B, 0x09, 0x5A, 0x01
@@ -842,7 +776,7 @@ MpsseOpcodes.SEND_IMMEDIATE      = 0x87
 </li>
 <li>Optionally follow with a TMS sequence to move to Run-Test/Idle.</li>
 </ul>
-<h2 id="bulk-write-optimization-practical-speed-trick">Bulk write optimization (practical speed trick)</h2>
+<h2 id="bulk-write-optimization">Bulk write optimization</h2>
 <ul>
 <li>For large memory writes (for example, writing an FSBL or bulk RAM loading), the host can pack hundreds or thousands of JTAG transactions into a single Python <code>bytearray</code> (or similar) and send it in large USB bulk writes (typical practice: chunk sizes tuned to device/driver limits, e.g., 64 KB chunks).</li>
 <li>This reduces USB overhead and maximizes the rate at which the FTDI MPSSE can toggle the JTAG pins and accept transactions.</li>
@@ -855,22 +789,6 @@ MpsseOpcodes.SEND_IMMEDIATE      = 0x87
 <li>Alignment: Prefer byte-aligned transfers when possible; use bit commands only for final alignment or to flip TMS.</li>
 <li>Pin mapping: The JTAG signals (TCK/TMS/TDI/TDO/TRST/SRST) are mapped to specific FTDI ADBUS/ACBUS pins — ensure the software configures directions and optional pull-ups correctly.</li>
 <li>Timing: MPSSE provides accurate internal timing for the clocks it generates, but USB still determines the latency between command submissions. MPSSE trades latency for aggregate throughput.</li>
-</ul>
-<h2 id="debugging-tips">Debugging tips</h2>
-<ul>
-<li>Log raw MPSSE commands (hex) sent and the raw read buffers returned; compare expected vs. actual TDO sequences.</li>
-<li>Test small state transitions first: verify a TMS-only sequence moves the TAP to the expected state before streaming large data transfers.</li>
-<li>Use known JTAG test patterns (e.g., IDCODE read) to validate the whole path (host → USB → MPSSE → target).</li>
-</ul>
-<h2 id="integration-notes">Integration notes</h2>
-<ul>
-<li>Libraries: Common user-space libraries/drivers that expose MPSSE functionality include <code>pyftdi</code>, <code>libftdi</code> and FTDI’s D2XX driver bindings. They provide <code>write()</code>/<code>read()</code> operations to move raw MPSSE buffers.</li>
-<li>Implementation strategy: Construct command buffers on the host, send with a single <code>write()</code> per chunk, then <code>read()</code> expected TDO bytes. Keep buffer construction deterministic and minimize per-transfer syscalls.</li>
-</ul>
-<h2 id="references">References</h2>
-<ul>
-<li>Project opcode mapping: <code>zynq_constants.py</code>  </li>
-<li>FTDI MPSSE Application Note and FTDI device datasheets (refer to the datasheet for exact opcode encodings and device limits).</li>
 </ul>
 
 

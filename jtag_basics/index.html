@@ -322,10 +322,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-4-wire-bus" class="md-nav__link">
+  <a href="#the-4-wire-bus-interface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The 4-Wire Bus
+        The 4-Wire Bus Interface
       
     </span>
   </a>
@@ -343,6 +343,17 @@
   
     <nav class="md-nav" aria-label="The TAP Controller State Machine">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serial-shifting-shift-ir-shift-dr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serial Shifting (Shift-IR / Shift-DR)
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#global-controller-states" class="md-nav__link">
@@ -547,10 +558,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-4-wire-bus" class="md-nav__link">
+  <a href="#the-4-wire-bus-interface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The 4-Wire Bus
+        The 4-Wire Bus Interface
       
     </span>
   </a>
@@ -568,6 +579,17 @@
   
     <nav class="md-nav" aria-label="The TAP Controller State Machine">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serial-shifting-shift-ir-shift-dr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serial Shifting (Shift-IR / Shift-DR)
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#global-controller-states" class="md-nav__link">
@@ -647,17 +669,17 @@
 
 
 <h1 id="jtag-protocol-basics">JTAG Protocol Basics</h1>
-<p>The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a hardware interface used for testing, verifying, and debugging printed circuit boards and integrated circuits. </p>
-<h2 id="the-4-wire-bus">The 4-Wire Bus</h2>
+<p>The Joint Test Action Group (JTAG) standard (IEEE 1149.1) is a synchronous serial interface used for testing, verifying, and debugging printed circuit boards and integrated circuits (even in daisy chain configuration). </p>
+<h2 id="the-4-wire-bus-interface">The 4-Wire Bus Interface</h2>
 <p>At its core, JTAG uses four mandatory pins:</p>
 <ul>
 <li><strong>TCK (Test Clock):</strong> Synchronizes the internal state machine operations.</li>
-<li><strong>TMS (Test Mode Select):</strong> Sampled on the rising edge of TCK to navigate the internal state machine.</li>
+<li><strong>TMS (Test Mode Select):</strong> Sampled on the rising edge of TCK to navigate the internal state machine (TAP Controller).</li>
 <li><strong>TDI (Test Data In):</strong> Serial data shifted into the device.</li>
 <li><strong>TDO (Test Data Out):</strong> Serial data shifted out of the device.</li>
 </ul>
 <h2 id="the-tap-controller-state-machine">The TAP Controller State Machine</h2>
-<p>Every JTAG-compliant chip contains a 16-state finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> (Test Mode Select) signal and occur strictly on the rising edge of the <code>TCK</code> (Test Clock) signal.</p>
+<p>Every JTAG-compliant chip contains a 16-states finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> (Test Mode Select) signal and occur strictly on the rising edge of the <code>TCK</code> (Test Clock) signal.</p>
 <p>Our controller in <code>jtag_controller.py</code> heavily relies on these specific states:</p>
 <ul>
 <li><strong>Test-Logic-Reset (TLR):</strong> The safe/reset state. Holding TMS <code>HIGH</code> for 5 consecutive clock cycles guarantees a return to TLR from <em>any</em> state.</li>
@@ -671,6 +693,8 @@
 <li><strong>Instruction Path (IR):</strong> States ending in "-IR". Used to shift control commands into the instruction register.</li>
 <li><strong>Data Path (DR):</strong> States ending in "-DR". Used to read from or write to the specific data register targeted by the active instruction.</li>
 </ul>
+<h3 id="serial-shifting-shift-ir-shift-dr">Serial Shifting (Shift-IR / Shift-DR)</h3>
+<p>During <code>Shift-IR</code> or <code>Shift-DR</code> the TAP shifts one bit per <code>TCK</code> rising edge: the controller drives the next bit on <code>TDI</code> which is sampled on that rising edge, while the device presents the bit shifted out on <code>TDO</code> (so you receive one output bit per clock as well). To shift an N‑bit value keep <code>TMS = 0</code> and toggle <code>TCK</code> for the first N−1 bits, then set <code>TMS = 1</code> on the final clock to exit the shift state and move to <code>Exit1-DR</code>/<code>Exit1-IR</code> as required.</p>
 <h3 id="global-controller-states">Global Controller States</h3>
 <ul>
 <li><strong>Test-Logic-Reset:</strong> All test logic is disabled in this state, allowing the IC to operate normally. The FSM is designed so that this state can always be reached from <em>any</em> current state by holding <code>TMS</code> high and pulsing <code>TCK</code> five times. Because of this built-in fail-safe, a physical Test Reset (<code>TRST</code>) pin is optional.</li>
