@@ -8,9 +8,9 @@ import ftd2xx as ftd
 import time
 import struct
 from zynq_constants import (
-    MpsseOpcodes, JtagInstr, CoreSightRegs, ZynqRegs, 
+    MpsseOpcodes, JtagInstr, CoreSightRegs, ZynqRegs, TmsCommands,
     KNOWN_TAPS, FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES,
-    DapReq, AhbApRegs, QspiConfig  # <--- Nuove classi aggiunte qui
+    DapReq, AhbApRegs, QspiConfig
 )
 
 class JtagController:
@@ -93,8 +93,8 @@ class JtagController:
             
             # Hardware power-on test
             self.device.purge(ftd.defines.PURGE_RX)
-            self.device.write(self._tms_reset() + self._tms_to_shift_dr())
-            self.device.write(MpsseOpcodes.READ_DATA_BYTES_LSB + b'\x03\x00' + self._tms_to_idle() + MpsseOpcodes.SEND_IMMEDIATE)
+            self.device.write(TmsCommands.RESET + TmsCommands.TO_SHIFT_DR)
+            self.device.write(MpsseOpcodes.READ_DATA_BYTES_LSB + b'\x03\x00' + TmsCommands.TO_IDLE + MpsseOpcodes.SEND_IMMEDIATE)
             time.sleep(0.01)
             
             rx_data = self.device.read(4)
@@ -150,7 +150,7 @@ class JtagController:
             return
             
         self.device.purge(ftd.defines.PURGE_RX)
-        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        self.device.write(TmsCommands.RESET + TmsCommands.TLR_TO_IDLE)
         self._init_ahb_ap()
 
         # Unlock SLCR to take control of clocking/reset lines
@@ -191,7 +191,7 @@ class JtagController:
             
         print("Targeting ARM AHB-AP -> QSPI Controller -> Reading Flash JEDEC ID...")
         self.device.purge(ftd.defines.PURGE_RX)
-        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        self.device.write(TmsCommands.RESET + TmsCommands.TLR_TO_IDLE)
         self._init_ahb_ap()
         
         # Disable Linear QSPI to switch to manual register/FIFO mapping
@@ -259,7 +259,7 @@ class JtagController:
             return
         print("Targeting ARM AHB-AP -> Testing OCM Memory Access...")
         self.device.purge(ftd.defines.PURGE_RX)
-        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        self.device.write(TmsCommands.RESET + TmsCommands.TLR_TO_IDLE)
         
         self._init_ahb_ap()
         magic_word = 0xDEADBEEF
@@ -276,7 +276,7 @@ class JtagController:
             return
         print("Targeting FPGA TAP -> Reading USERCODE...")
         self.device.purge(ftd.defines.PURGE_RX)
-        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        self.device.write(TmsCommands.RESET + TmsCommands.TLR_TO_IDLE)
         self._shift_ir(JtagInstr.FPGA_USERCODE, tap_index=0)
         print(f"FPGA USERCODE: 0x{self._shift_dr(0x00000000, 32, 0):08X}")
 
@@ -292,7 +292,7 @@ class JtagController:
             
         print("Targeting ARM DAP -> CoreSight Initialization...")
         self.device.purge(ftd.defines.PURGE_RX)
-        self.device.write(self._tms_reset() + self._tms_tlr_to_idle())
+        self.device.write(TmsCommands.RESET + TmsCommands.TLR_TO_IDLE)
         
         ack_labels = {0x01: "WAIT", 0x02: "OK", 0x04: "FAULT"}
         
@@ -345,10 +345,10 @@ class JtagController:
         try:
             print("Scanning JTAG chain (Blind Scan)...")
             self.device.purge(ftd.defines.PURGE_RX)
-            mpsse_payload = bytearray(self._tms_reset() + self._tms_to_shift_dr())
+            mpsse_payload = bytearray(TmsCommands.RESET + TmsCommands.TO_SHIFT_DR)
             bytes_to_read = max_devices * 4
             mpsse_payload += MpsseOpcodes.READ_DATA_BYTES_LSB + struct.pack('<H', bytes_to_read - 1)
-            mpsse_payload += self._tms_to_idle() + MpsseOpcodes.SEND_IMMEDIATE
+            mpsse_payload += TmsCommands.TO_IDLE + MpsseOpcodes.SEND_IMMEDIATE
             self.device.write(bytes(mpsse_payload))
             time.sleep(0.01)
             
@@ -408,7 +408,7 @@ class JtagController:
                 req = (w << 3) | (CoreSightRegs.AP_DRW << 1) | 0
                 shift_val = (req << 1) | 0x01
                 
-                payload += self._tms_idle_to_shift_dr()
+                payload += TmsCommands.IDLE_TO_SHIFT_DR
                 payload += MpsseOpcodes.SHIFT_BYTES_LSB_RW + b'\x03\x00' + (shift_val & 0xFFFFFFFF).to_bytes(4, 'little')
                 
                 rem_val = (shift_val >> 32) & 0x0F
@@ -416,7 +416,7 @@ class JtagController:
                 
                 tms_byte = 0x01 | (((rem_val >> 3) & 0x01) << 7)
                 payload += MpsseOpcodes.SHIFT_TMS_NO_READ + b'\x00' + struct.pack('<B', tms_byte)
-                payload += self._tms_exit_to_idle()
+                payload += TmsCommands.EXIT_TO_IDLE
                 
             self.device.write(bytes(payload))
             self.device.purge(ftd.defines.PURGE_RX)
@@ -435,7 +435,7 @@ class JtagController:
         return (rx_val >> 1) & ((1 << dr_len) - 1) if tap_index == 1 else rx_val & ((1 << dr_len) - 1)
 
     def _shift_bits(self, data_val: int, num_bits: int, is_ir: bool = False):
-        payload = bytearray(self._tms_idle_to_shift_ir() if is_ir else self._tms_idle_to_shift_dr())
+        payload = bytearray(TmsCommands.IDLE_TO_SHIFT_IR if is_ir else TmsCommands.IDLE_TO_SHIFT_DR)
         num_bytes, remaining_bits = (num_bits - 1) // 8, (num_bits - 1) % 8
         last_bit = (data_val >> (num_bits - 1)) & 0x01
         
@@ -448,7 +448,7 @@ class JtagController:
         
         tms_byte = 0x01 | (last_bit << 7)
         payload += MpsseOpcodes.SHIFT_TMS_READ + b'\x00' + struct.pack('<B', tms_byte)
-        payload += self._tms_exit_to_idle() + MpsseOpcodes.SEND_IMMEDIATE
+        payload += TmsCommands.EXIT_TO_IDLE + MpsseOpcodes.SEND_IMMEDIATE
         self.device.write(bytes(payload))
         
         expected_rx_len = num_bytes + (1 if remaining_bits > 0 else 0) + 1
@@ -465,33 +465,3 @@ class JtagController:
                 idx += 1
             rx_val |= (((rx_data[idx] >> 7) & 0x01) << (num_bits - 1))
         return rx_val
-
-    # =========================================================================
-    # 6. TAP STATE MACHINE TRANSITIONS (INTERNAL LOGIC BUILDERS)
-    # =========================================================================
-    
-    def _build_tms_cmd(self, tms_sequence: int, bit_length: int) -> bytes:
-        return MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', bit_length - 1, tms_sequence)
-
-    def _tms_reset(self): 
-        return self._build_tms_cmd(0xFF, 8) * 4
-
-    def _tms_to_shift_dr(self): 
-        return self._build_tms_cmd(0x02, 4)
-
-    def _tms_to_idle(self): 
-        return self._build_tms_cmd(0x03, 3)
-
-    def _tms_exit_to_idle(self): 
-        return self._build_tms_cmd(0x01, 2)
-
-    def _tms_tlr_to_idle(self): 
-        return self._build_tms_cmd(0x00, 1)
-
-    def _tms_idle_to_shift_ir(self): 
-        return self._build_tms_cmd(0x03, 4)
-
-    def _tms_idle_to_shift_dr(self): 
-        return self._build_tms_cmd(0x01, 3)
-    
-    

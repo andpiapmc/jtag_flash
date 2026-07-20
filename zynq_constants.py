@@ -4,6 +4,8 @@ Includes JTAG instruction registers, MPSSE opcodes, CoreSight layout,
 and Flash memory JEDEC decoding dictionaries.
 """
 
+import struct
+
 class MpsseOpcodes:
     """FTDI MPSSE Command Opcodes."""
     DISABLE_CLK_DIV5      = b'\x8A'
@@ -20,6 +22,19 @@ class MpsseOpcodes:
     SHIFT_TMS_NO_READ     = b'\x4B'
     SHIFT_TMS_READ        = b'\x6B'
     SEND_IMMEDIATE        = b'\x87'
+
+
+class TmsCommands:
+    """TAP CONTROLLER STATE MACHINE CONSTANTS
+    Pre-calculated MPSSE TMS shift commands for state transitions.
+    """
+    RESET            = (MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 7, 0xFF)) * 4
+    TO_SHIFT_DR      = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 3, 0x02)
+    TO_IDLE          = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 2, 0x03)
+    EXIT_TO_IDLE     = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 1, 0x01)
+    TLR_TO_IDLE      = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 0, 0x00)
+    IDLE_TO_SHIFT_IR = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 3, 0x03)
+    IDLE_TO_SHIFT_DR = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 2, 0x01)
 
 
 class JtagInstr:
