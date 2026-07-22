@@ -1,45 +1,52 @@
-import zynq_constants
+"""
+Zynq-7000 MIO and GPIO Hardware Controller.
+Manages pin multiplexing via SLCR and GPIO output registers.
+"""
+
+from zynq_constants import ZynqRegs
 
 
 class ZynqGPIO:
-    """
-    Layer 4c: Controllo MIO e GPIO per Zynq-7000.
-    """
-
     def __init__(self, dap, soc):
         self.dap = dap
         self.soc = soc
 
-    def force_mio_gpio_high(self, mio_pin: int):
+    # -------------------------------------------------------------------
+    # Internal Hardware Helpers (Private)
+    # -------------------------------------------------------------------
+
+    def _set_mio_gpio_output(self, mio_pin: int, level: int):
         """
-        Configura un pin MIO (0-31) come GPIO Output guidato a LIVELLO ALTO (1).
+        Configures an MIO pin (0-31) as a GPIO Output and sets its logical level (0 or 1).
         """
         if not (0 <= mio_pin <= 31):
-            raise ValueError(f"MIO pin {mio_pin} fuori dal range supportato (0-31).")
+            raise ValueError(f"MIO pin {mio_pin} out of supported range (0-31).")
 
-        # 1. Configura il MIO Mux in SLCR come GPIO
+        # 1. Configure MIO Mux in SLCR as GPIO Output
         self.soc.slcr_unlock()
-        # Usa il valore base SLCR definito nel modulo constants
-        slcr_base = getattr(zynq_constants, "SLCR_BASE", 0xF8000000)
-        mio_ctrl_reg = slcr_base + 0x700 + (mio_pin * 4)
-        
-        # TRI_ENABLE=0 (output enabled), L3..L0_SEL=0 (GPIO)
-        self.dap.write_mem32(mio_ctrl_reg, 0x00000600)
+        mio_ctrl_reg = ZynqRegs.SLCR_MIO_CTRL_0 + (mio_pin * 4)
+        self.dap.write_mem32(mio_ctrl_reg, ZynqRegs.MIO_PIN_MUX_GPIO)
 
-        # 2. Indirizzi GPIO Controller (Bank 0 per MIO 0-31)
-        gpio_base = getattr(zynq_constants, "GPIO_BASE", 0xE000A000)
-        gpio_dirm = gpio_base + 0x00000284
-        gpio_oen  = gpio_base + 0x00000288
-        gpio_data = gpio_base + 0x00000040
+        # 2. Configure Direction (DIRM) and Output Enable (OEN)
+        val_dirm = self.dap.read_mem32(ZynqRegs.GPIO_DIRM_0)
+        self.dap.write_mem32(ZynqRegs.GPIO_DIRM_0, val_dirm | (1 << mio_pin))
 
-        # Configura Direction (DIRM_0) -> Output (1)
-        val_dirm = self.dap.read_mem32(gpio_dirm)
-        self.dap.write_mem32(gpio_dirm, val_dirm | (1 << mio_pin))
+        val_oen = self.dap.read_mem32(ZynqRegs.GPIO_OEN_0)
+        self.dap.write_mem32(ZynqRegs.GPIO_OEN_0, val_oen | (1 << mio_pin))
 
-        # Configura Output Enable (OEN_0) -> Enabled (1)
-        val_oen = self.dap.read_mem32(gpio_oen)
-        self.dap.write_mem32(gpio_oen, val_oen | (1 << mio_pin))
+        # 3. Drive DATA bit high or low
+        val_data = self.dap.read_mem32(ZynqRegs.GPIO_DATA_0)
+        if level:
+            val_data |= (1 << mio_pin)
+        else:
+            val_data &= ~(1 << mio_pin)
+            
+        self.dap.write_mem32(ZynqRegs.GPIO_DATA_0, val_data)
 
-        # Scrivi dato alto (DATA_0) -> High (1)
-        val_data = self.dap.read_mem32(gpio_data)
-        self.dap.write_mem32(gpio_data, val_data | (1 << mio_pin))
+    # -------------------------------------------------------------------
+    # Public API
+    # -------------------------------------------------------------------
+
+    def force_mio_gpio_high(self, mio_pin: int):
+        """Forces an MIO pin (0-31) to GPIO HIGH state."""
+        self._set_mio_gpio_output(mio_pin, level=1)

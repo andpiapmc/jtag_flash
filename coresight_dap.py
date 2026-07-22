@@ -1,18 +1,6 @@
 """
-LAYER 3 - ARM CORESIGHT DEBUG ACCESS PORT (DAP)
-================================================
-Implements ARM CoreSight DPACC/APACC transactions: the protocol ARM debug
-hardware uses on top of plain JTAG to read/write the Debug Port (DP) and,
-through the AHB-AP (Advanced High-performance Bus Access Port), arbitrary
-system memory addresses.
-
-Anyone learning ARM debug internals should be able to read *only* this file
-(plus the JTAG primitives in jtag_tap.py) to understand:
-  - how a DPACC/APACC 35-bit request is framed (data | address | RnW),
-  - how the AHB-AP is configured (CSW/TAR/DRW) to become a "memory window",
-  - how a single physical address read/write becomes two JTAG DR shifts.
-
-Built on top of: jtag_tap.py
+ARM CoreSight Debug Access Port (DAP) Driver.
+Handles DPACC/APACC 35-bit transactions and AHB-AP system memory window access.
 """
 
 import struct
@@ -20,98 +8,78 @@ from zynq_constants import JtagInstr, CoreSightRegs, DapReq, AhbApRegs, TmsComma
 
 
 class CoreSightDap:
-    """ARM DAP transactions and AHB-AP memory access, built on a JtagTap."""
-
     def __init__(self, tap):
         self.tap = tap
 
     # -------------------------------------------------------------------
-    # Raw DPACC / APACC transactions
+    # Low-level DPACC / APACC Transactions (Private)
     # -------------------------------------------------------------------
 
-    def dap_write(self, is_ap: bool, a32: int, data: int) -> int:
-        """
-        Performs one DPACC (Debug Port) or APACC (Access Port) write.
-        Frame layout (35 bits): [34:3 [Data] | [2:1 Address A[3:2]] | [0 RnW]].
-        Returns the 3-bit ACK response (see DapReq.ACK_MASK).
-        """
+    def _dap_write(self, is_ap: bool, a32: int, data: int) -> int:
+        """Frame layout (35 bits): [34:3 Data] | [2:1 Addr A32] | [0 RnW]."""
         ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
         self.tap.shift_ir(ir, tap_index=1)
         req = (data << 3) | (a32 << 1) | DapReq.WRITE
         return self.tap.shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1) & DapReq.ACK_MASK
 
-    def dap_read(self, is_ap: bool, a32: int):
+    def _dap_read(self, is_ap: bool, a32: int):
         """
-        Performs one DPACC/APACC read. ARM debug reads are pipelined: the
-        first shift *requests* the read, the second shift *retrieves* the
-        result of the previous request. Returns (value, ack).
+        ARM Debug reads are pipelined: 
+        1st shift requests data, 2nd shift retrieves result.
         """
         ir = JtagInstr.DAP_APACC if is_ap else JtagInstr.DAP_DPACC
         self.tap.shift_ir(ir, tap_index=1)
         req = (0 << 3) | (a32 << 1) | DapReq.READ
-        self.tap.shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1)  # First shift initiates read
-        rx_val = self.tap.shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1)  # Second shift extracts data
+        
+        self.tap.shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1)  # Request
+        rx_val = self.tap.shift_dr(req, dr_len=DapReq.SHIFT_LEN, tap_index=1)  # Retrieve
         return (rx_val >> 3) & 0xFFFFFFFF, rx_val & DapReq.ACK_MASK
 
-    def clear_sticky_errors(self):
-        """
-        Clears WDATAERR/STICKYERR/STICKYCMP/STICKYORUN via a DP_ABORT write.
-        Note: unlike dap_write(), this does NOT re-select the DPACC
-        instruction first - it deliberately reuses whatever IR is currently
-        loaded (normally APACC, since it is called right after AP register
-        writes) to save a JTAG IR-shift on a hot path. This matches how
-        DP_ABORT was accessed in the original tested implementation.
-        """
-        req_abort = (DapReq.CLEAR_ERR << 3) | (CoreSightRegs.DP_ABORT << 1) | DapReq.WRITE
-        self.tap.shift_dr(req_abort, dr_len=DapReq.SHIFT_LEN, tap_index=1)
+    def _init_ahb_ap(self):
+        """Powers up debug domains and configures AHB-AP CSW register."""
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_CTRL_STAT, data=DapReq.PWRUP_REQ)
+        self._dap_write(is_ap=False, a32=CoreSightRegs.DP_SELECT,    data=0x00000000)
+        self._dap_write(is_ap=True,  a32=CoreSightRegs.AP_CSW,       data=AhbApRegs.CSW_DEFAULT_32BIT)
 
     # -------------------------------------------------------------------
-    # AHB-AP bring-up and memory access
+    # Memory Access API
     # -------------------------------------------------------------------
 
     def connect(self):
-        """
-        Standard bring-up sequence to get a usable "memory window" into the
-        target: reset the TAP, power up the debug domains, then configure
-        the AHB-AP for 32-bit single-increment transfers.
-        """
+        """Resets TAP and brings up the AHB-AP memory window."""
         self.tap.transport.reset_tap_to_idle()
-        self.init_ahb_ap()
+        self._init_ahb_ap()
 
-    def init_ahb_ap(self):
-        """Powers up the debug domains and configures the AHB-AP CSW register."""
-        self.dap_write(is_ap=False, a32=CoreSightRegs.DP_CTRL_STAT, data=DapReq.PWRUP_REQ)
-        self.dap_write(is_ap=False, a32=CoreSightRegs.DP_SELECT,    data=0x00000000)
-        self.dap_write(is_ap=True,  a32=CoreSightRegs.AP_CSW,       data=AhbApRegs.CSW_DEFAULT_32BIT)
+    def clear_sticky_errors(self):
+        """Clears DP_ABORT error flags reusing the currently loaded IR."""
+        req_abort = (DapReq.CLEAR_ERR << 3) | (CoreSightRegs.DP_ABORT << 1) | DapReq.WRITE
+        self.tap.shift_dr(req_abort, dr_len=DapReq.SHIFT_LEN, tap_index=1)
 
     def write_mem32(self, address: int, data: int):
-        """Writes a discrete 32-bit word directly to an absolute physical address via AHB-AP."""
-        self.dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
-        self.dap_write(is_ap=True, a32=CoreSightRegs.AP_DRW, data=data)
+        """Writes a 32-bit word to a physical memory address via AHB-AP."""
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_DRW, data=data)
 
     def read_mem32(self, address: int) -> int:
-        """Reads a discrete 32-bit word directly from an absolute physical address via AHB-AP."""
-        self.dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
-        return self.dap_read(is_ap=True, a32=CoreSightRegs.AP_DRW)[0]
+        """Reads a 32-bit word from a physical memory address via AHB-AP."""
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=address)
+        return self._dap_read(is_ap=True, a32=CoreSightRegs.AP_DRW)[0]
 
     def write_mem32_bulk(self, start_address: int, words: list):
         """
-        Fast path for writing many consecutive 32-bit words (e.g. loading a
-        whole FSBL binary into OCM). Bypasses the generic shift_dr() helper
-        and builds raw MPSSE payloads directly, batching hundreds of JTAG
-        transactions into a single USB write to maximize throughput.
-        AP_TAR auto-increments (CSW AddrInc=Single), so we only set the
-        target address once and then stream DRW writes.
+        Fast bulk memory write bypassing standard shift_dr.
+        Streams raw MPSSE packets over USB, relying on AHB-AP TAR auto-increment.
         """
-        self.dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=start_address)
+        self._dap_write(is_ap=True, a32=CoreSightRegs.AP_TAR, data=start_address)
         self.tap.shift_ir(JtagInstr.DAP_APACC, tap_index=1)
 
         batch_size = 800
         for i in range(0, len(words), batch_size):
             batch = words[i:i + batch_size]
             payload = bytearray()
+            
             for w in batch:
-                req = (w << 3) | (CoreSightRegs.AP_DRW << 1) | 0
+                req = (w << 3) | (CoreSightRegs.AP_DRW << 1)
                 shift_val = (req << 1) | 0x01
 
                 payload += TmsCommands.IDLE_TO_SHIFT_DR
@@ -132,7 +100,7 @@ class CoreSightDap:
     # -------------------------------------------------------------------
 
     def test_dap_handshake(self):
-        """Initializes and asserts line handshakes with the ARM Debug Access Port, printing ACKs."""
+        """Asserts line handshakes with ARM DAP and verifies ACKs."""
         print("Targeting ARM DAP -> CoreSight Initialization...")
         self.tap.transport.reset_tap_to_idle()
 
@@ -157,7 +125,7 @@ class CoreSightDap:
         ack_pwrup = self.tap.shift_dr(req_status, dr_len=DapReq.SHIFT_LEN, tap_index=1) & DapReq.ACK_MASK
         print(f"PWRUP ACK      : 0x{ack_pwrup:02X} [{ack_labels.get(ack_pwrup, 'INVALID/NO-ACK')}]")
 
-        # Extract status data (pipelined read - see dap_read())
+        # Extract status data
         rx_val = self.tap.shift_dr(req_status, dr_len=DapReq.SHIFT_LEN, tap_index=1)
         ack_ctrl = rx_val & DapReq.ACK_MASK
         print(f"CTRL/STAT ACK  : 0x{ack_ctrl:02X} [{ack_labels.get(ack_ctrl, 'INVALID/NO-ACK')}]")
