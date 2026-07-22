@@ -102,13 +102,28 @@ class ZynqRegs:
     QSPI_BASE        = 0xE000D000
     QSPI_CONFIG      = QSPI_BASE + 0x00
     QSPI_STATUS      = QSPI_BASE + 0x04
-    QSPI_ENABLE      = QSPI_BASE + 0x08
+    QSPI_ENABLE      = QSPI_BASE + 0x14
     QSPI_TXD_FIFO    = QSPI_BASE + 0x1C
     QSPI_RXD_FIFO    = QSPI_BASE + 0x20
     QSPI_LQSPI_CFG   = QSPI_BASE + 0xA0
     
     # On-Chip Memory
     OCM_BASE_ADDR    = 0x00000000
+
+
+class FlashCmd:
+    """Standard JEDEC QSPI Flash Opcodes"""
+    WRSR = 0x01  # Write Status Register
+    WRSR2 = 0x31 # Write Status Register-2
+    WREN = 0x06  # Write Enable
+    RDSR = 0x05  # Read Status Register
+    RDSR2 = 0x35 # Read Status Register-2
+    SE   = 0xD8  # Sector Erase (64KB)
+    CE   = 0xC7  # Chip Erase
+    PP   = 0x02  # Page Program
+    FAST_READ = 0x0B  # Fast Read with dummy cycle
+    RDID = 0x9F # Read JEDEC ID
+    QE_BIT = 0x40  # Quad Enable bit
 
 
 # Dictionary of known TAP IDCODEs
