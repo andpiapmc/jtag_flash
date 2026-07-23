@@ -1,5 +1,6 @@
 """
 CLI entry point for the Zynq JTAG Management Tool.
+Provides interactive menu interfaces for debugging and flash programming.
 """
 
 import sys
@@ -7,11 +8,10 @@ from jtag_controller import JtagController
 
 
 def _ask_int(prompt: str, default: int) -> int:
+    """Prompts user for an integer or hexadecimal value."""
     raw_input = input(f"{prompt} [default: 0x{default:06X}]: ").strip()
-    
     if not raw_input:
         return default
-        
     try:
         return int(raw_input, 0)
     except ValueError:
@@ -20,22 +20,26 @@ def _ask_int(prompt: str, default: int) -> int:
 
 
 def _ask_str(prompt: str, default: str) -> str:
+    """Prompts user for a string value with a default fallback."""
     raw_input = input(f"{prompt} [default: {default}]: ").strip()
     return raw_input if raw_input else default
 
 
-def cmd_erase_qspi_sector(controller: JtagController):
+def cmd_erase_qspi_sector(controller: JtagController) -> None:
+    """CLI wrapper for sector erase command."""
     offset = _ask_int("Sector offset to erase", default=0x000000)
     controller.erase_qspi_sector(offset=offset)
 
 
-def cmd_write_qspi_binary(controller: JtagController):
+def cmd_write_qspi_binary(controller: JtagController) -> None:
+    """CLI wrapper for flashing binary file."""
     filepath = _ask_str("Path of the binary file to flash", default="bootblock.bin")
     offset = _ask_int("Target flash offset", default=0x000000)
     controller.write_qspi_binary(filepath=filepath, start_offset=offset)
 
 
-def cmd_run_fsbl_bin(controller: JtagController):
+def cmd_run_fsbl_bin(controller: JtagController) -> None:
+    """CLI wrapper for FSBL injection."""
     filepath = _ask_str("Path of the FSBL binary to load", default="fsbl.bin")
     controller.run_fsbl_bin(filepath=filepath)
 
@@ -60,7 +64,8 @@ menu_options = {
 }
 
 
-def show_menu():
+def show_menu() -> None:
+    """Prints formatted interactive menu options."""
     print("\n" + "-" * 40)
     for key, option in menu_options.items():
         print(f"{key}. {option['label']}")
@@ -68,6 +73,7 @@ def show_menu():
 
 
 def main_loop(controller: JtagController) -> bool:
+    """Main execution loop for parsing user selection."""
     choice = input("> ").strip()
 
     if choice == "0":
@@ -77,7 +83,6 @@ def main_loop(controller: JtagController) -> bool:
         try:
             menu_options[choice]["func"](controller)
         except Exception as e:
-            # Errore pulito di una riga, senza traceback
             print(f"ERROR: Command failed: {e}")
 
     return True
@@ -85,12 +90,11 @@ def main_loop(controller: JtagController) -> bool:
 
 if __name__ == '__main__':
     jtag_controller = JtagController()
-    
     show_menu()
-    
+
     while main_loop(jtag_controller):
         pass
-    
+
     print("Exiting...")
     jtag_controller.close()
     sys.exit(0)
