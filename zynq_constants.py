@@ -15,7 +15,6 @@ class MpsseOpcodes:
     SEND_IMMEDIATE        = b'\x87'
 
 class TmsCommands:
-    """Pre-calculated MPSSE TMS shift commands for state transitions."""
     RESET            = (MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 7, 0xFF)) * 4
     TO_SHIFT_DR      = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 3, 0x02)
     TO_IDLE          = MpsseOpcodes.SHIFT_TMS_NO_READ + struct.pack('<BB', 2, 0x03)
@@ -31,12 +30,10 @@ class JtagInstr:
     DAP_IDCODE    = 0x0E
 
 class CoreSightRegs:
-    # DP Registers
     DP_ABORT      = 0x0
     DP_CTRL_STAT  = 0x1
     DP_SELECT     = 0x2
     DP_RDBUFF     = 0x3
-    # AHB-AP Registers
     AP_CSW        = 0x0
     AP_TAR        = 0x1
     AP_DRW        = 0x3
@@ -46,23 +43,24 @@ class DapReq:
     WRITE     = 0
     SHIFT_LEN = 35 
     ACK_MASK  = 0x07
-    CLEAR_ERR = 0x0000001E  # Clears DP_ABORT error flags
-    PWRUP_REQ = 0x50000000  # Sets DP_CTRL_STAT powerup requests
+    CLEAR_ERR = 0x0000001E
+    PWRUP_REQ = 0x50000000
 
 class AhbApRegs:
-    # Size=32bit, AddrInc=Single, DeviceEn=1, Prot=0x23
     CSW_DEFAULT_32BIT = 0x23000012
 
 class QspiConfig:
-    BAUD_DIV_32     = (0x4 << 3) # Clock divisor /32
-    MANUAL_START_EN = (1 << 15)
-    MANUAL_CS_EN    = (1 << 14)
-    PCS0_HIGH       = (1 << 10)
-    MANUAL_START    = (1 << 16)
-    JEDEC_CMD       = 0x0000009F
+    LEG_FLSH            = (1 << 31)  # Enable Legacy SPI Bit-banging
+    BAUD_DIV_32         = (0x4 << 3)
+    MANUAL_START_EN     = (1 << 15)
+    MANUAL_CS_EN        = (1 << 14)
+    PCS_ALL_HIGH        = (0xF << 10)  # 1111: Tutti i CS disattivati (impedisce collisioni su MISO)
+    PCS0_ACTIVE         = (0xE << 10)  # 1110: Solo CS0 attivo
+    MANUAL_START        = (1 << 16)
+    
+    STATUS_RX_NOT_EMPTY = (1 << 4)
 
 class ZynqRegs:
-    # SLCR (System Level Control Registers)
     SLCR_BASE        = 0xF8000000
     SLCR_UNLOCK_ADDR = SLCR_BASE + 0x08
     SLCR_LOCK_ADDR   = SLCR_BASE + 0x04
@@ -70,15 +68,20 @@ class ZynqRegs:
     SLCR_UNLOCK_KEY  = 0x0000DF0D
     SLCR_LOCK_KEY    = 0x0000767B
     A9_CPU_RST_CTRL  = SLCR_BASE + 0x244
+    APER_CLK_CTRL    = SLCR_BASE + 0x12C
+    LQSPI_CLK_CTRL   = SLCR_BASE + 0x14C
+    LQSPI_RST_CTRL   = SLCR_BASE + 0x230
 
-    # GPIO Peripheral
+    LQSPI_CLK_CTRL_SAFE_VAL = 0x00002821
+    GPIO_CLK_ACT     = 1 << 22
+    LQSPI_CLK_ACT    = 1 << 23
+
     GPIO_BASE        = 0xE000A000
     GPIO_DATA_0      = GPIO_BASE + 0x040
-    GPIO_DIRM_0      = GPIO_BASE + 0x284
-    GPIO_OEN_0       = GPIO_BASE + 0x288
+    GPIO_DIRM_0      = GPIO_BASE + 0x204
+    GPIO_OEN_0       = GPIO_BASE + 0x208
     MIO_PIN_MUX_GPIO = 0x00000600
 
-    # QSPI Controller
     QSPI_BASE        = 0xE000D000
     QSPI_CONFIG      = QSPI_BASE + 0x00
     QSPI_STATUS      = QSPI_BASE + 0x04
@@ -90,34 +93,30 @@ class ZynqRegs:
     QSPI_TAIL_3BYTE  = QSPI_BASE + 0x88
     QSPI_LQSPI_CFG   = QSPI_BASE + 0xA0
     
-    # On-Chip Memory
     OCM_BASE_ADDR    = 0x00000000
 
 class FlashCmd:
-    READ      = 0x03  # Standard Read
-    WRSR      = 0x01
-    WRSR2     = 0x31
-    WREN      = 0x06
-    RDSR      = 0x05
-    RDSR2     = 0x35
-    SE        = 0xD8  # Sector Erase (64KB)
-    CE        = 0xC7  # Chip Erase
-    PP        = 0x02  # Page Program
-    FAST_READ = 0x0B
-    RDID      = 0x9F
-    QE_BIT    = 0x40  # Quad Enable bit
+    READ               = 0x03
+    WRSR               = 0x01
+    WRSR2              = 0x31
+    WREN               = 0x06
+    RDSR               = 0x05
+    RDSR2              = 0x35
+    SE                 = 0xD8
+    CE                 = 0xC7
+    PP                 = 0x02
+    FAST_READ          = 0x0B
+    RDID               = 0x9F
+    RELEASE_POWER_DOWN = 0xAB
+    QE_BIT             = 0x40
+
+    SR1_WIP            = 0x01
+    SR1_WEL            = 0x02
+    SR2_QE             = 0x02
 
 KNOWN_TAPS = {
     0x0BA00477: "ARM Cortex-A9 CoreSight DAP (Zynq 7000)",
-    0x0BA02477: "ARM Cortex-A53 CoreSight DAP (Zynq UltraScale+)",
-    0x0BA04477: "ARM Cortex-R5 CoreSight DAP",
-    0x03722093: "Xilinx Zynq Z-7010",
-    0x03727093: "Xilinx Zynq Z-7015 / Z-7020",
-    0x0372C093: "Xilinx Zynq Z-7030",
-    0x03731093: "Xilinx Zynq Z-7045",
-    0x03736093: "Xilinx Zynq Z-7100",
-    0x04711093: "Xilinx Zynq UltraScale+ ZU2EG/ZU3EG",
-    0x04721093: "Xilinx Zynq UltraScale+ ZU4/ZU5/ZU7"
+    0x0BA02477: "ARM Cortex-A53 CoreSight DAP (Zynq UltraScale+)"
 }
 
 FLASH_MANUFACTURERS = {

@@ -8,7 +8,6 @@ from mpsse_transport import MpsseTransport
 from jtag_tap import JtagTap
 from coresight_dap import CoreSightDap
 from qspi_flash import QspiFlash
-from zynq_gpio import ZynqGPIO
 from zynq_soc import ZynqSoc
 
 
@@ -18,8 +17,7 @@ class JtagController:
         self.tap = JtagTap(self.transport)
         self.dap = CoreSightDap(self.tap)
         self.soc = ZynqSoc(self.dap)
-        self.gpio = ZynqGPIO(self.dap, self.soc)
-        self.qspi = QspiFlash(self.dap, self.soc, self.gpio)
+        self.qspi = QspiFlash(self.dap, self.soc)
 
     @staticmethod
     def list_ftdi_devices():

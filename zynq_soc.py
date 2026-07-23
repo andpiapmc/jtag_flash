@@ -13,29 +13,44 @@ class ZynqSoc:
         self.dap = dap
 
     # -------------------------------------------------------------------
-    # SLCR Unlock / Lock (Public API for other modules like ZynqGPIO)
+    # SLCR Unlock / Lock (Public API for other modules)
     # -------------------------------------------------------------------
 
     def slcr_unlock(self):
-        """Unlocks the SLCR so clocking, MIO muxing, and reset registers become writable."""
         self.dap.write_mem32(ZynqRegs.SLCR_UNLOCK_ADDR, ZynqRegs.SLCR_UNLOCK_KEY)
 
     def slcr_lock(self):
-        """Re-locks the SLCR."""
         self.dap.write_mem32(ZynqRegs.SLCR_LOCK_ADDR, ZynqRegs.SLCR_LOCK_KEY)
+
+    def enable_peripheral_clock(self, clock_enable_mask: int):
+        self.slcr_unlock()
+        current = self.dap.read_mem32(ZynqRegs.APER_CLK_CTRL)
+        if not (current & clock_enable_mask):
+            self.dap.write_mem32(ZynqRegs.APER_CLK_CTRL, current | clock_enable_mask)
+        self.slcr_lock()
+
+    def enable_qspi_ref_clock(self):
+        """Sovrascrive l'intero registro con il valore sano per evitare stalli post-FSBL."""
+        self.slcr_unlock()
+        self.dap.write_mem32(ZynqRegs.LQSPI_CLK_CTRL, ZynqRegs.LQSPI_CLK_CTRL_SAFE_VAL)
+        self.slcr_lock()
+
+    def clear_qspi_reset(self):
+        """Assicura che il modulo QSPI sia fuori dal reset."""
+        self.slcr_unlock()
+        self.dap.write_mem32(ZynqRegs.LQSPI_RST_CTRL, 0x00000000)
+        self.slcr_lock()
 
     # -------------------------------------------------------------------
     # Internal Register & CPU Helpers (Private)
     # -------------------------------------------------------------------
 
     def _halt_cpu0(self) -> int:
-        """Asserts CPU0 reset and returns previous register value to restore bits later."""
         current_rst = self.dap.read_mem32(ZynqRegs.A9_CPU_RST_CTRL)
         self.dap.write_mem32(ZynqRegs.A9_CPU_RST_CTRL, current_rst | 0x01)
         return current_rst
 
     def _release_cpu0(self, previous_value: int):
-        """De-asserts CPU0 reset, restoring original control bits."""
         self.dap.write_mem32(ZynqRegs.A9_CPU_RST_CTRL, previous_value & ~0x01)
 
     # -------------------------------------------------------------------
@@ -43,7 +58,6 @@ class ZynqSoc:
     # -------------------------------------------------------------------
 
     def load_and_run_fsbl(self, filepath: str = "fsbl.bin"):
-        """Halts CPU0, writes the FSBL binary into OCM via bulk transfer, and releases the CPU."""
         print(f"Targeting ARM AHB-AP -> Loading '{filepath}' into OCM...")
 
         try:
@@ -59,7 +73,6 @@ class ZynqSoc:
         print(" -> Halting CPU0...")
         current_rst = self._halt_cpu0()
 
-        # Pack raw binary data into 32-bit words for bulk transfer
         words = []
         for i in range(0, len(data), 4):
             chunk = data[i:i + 4].ljust(4, b'\x00')
@@ -79,7 +92,6 @@ class ZynqSoc:
         print("SUCCESS: Board is ready.")
 
     def test_ocm_ram(self):
-        """Sanity test verifying 32-bit read/write access to On-Chip RAM."""
         print("Targeting ARM AHB-AP -> Testing OCM Memory Access...")
         self.dap.connect()
         magic_word = 0xDEADBEEF
