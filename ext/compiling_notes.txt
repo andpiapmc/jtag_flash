@@ -1,0 +1,10 @@
+C:\Users\admin\Desktop\jtag_flash\ext>C:\Xilinx\Vitis\2022.2\gnu\aarch32\nt\gcc-arm-none-eabi\bin\arm-none-eabi-gcc.exe -O2 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=hard -ffreestanding -nostdlib -fPIC flash_stub.c -o flash_stub.elf
+
+Parametri chiave spiegati:
+-mcpu=cortex-a9: Identifica esattamente l'architettura dei core applicativi della Zynq-7000.
+
+-mfpu=vfpv3-d16 -mfloat-abi=hard: Configura l'unità FPU hardware integrata nel Cortex-A9 (puoi usare -mfloat-abi=softfp se la tua toolchain gestisce le chiamate software per la FPU).
+
+-fPIC: Genera codice indipendente dalla posizione (Position Independent Code), essenziale se lo stub viene caricato al volo in OCM (es. a 0x00000000 o 0xFFFF0000) da script OpenOCD/XDB.
+
+-nostdlib / -ffreestanding: Dice al compilatore di non includere la libreria standard C, riducendo le dimensioni del binario e rimuovendo dipendenze dal sistema operativo.
