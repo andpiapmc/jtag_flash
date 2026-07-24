@@ -5,6 +5,7 @@ Provides interactive menu interfaces for debugging and flash programming.
 
 import sys
 from jtag_controller import JtagController
+from zynq_constants import DEFAULT_FSBL_PATH, DEFAULT_BOOTBLOCK_PATH
 
 
 def _ask_int(prompt: str, default: int) -> int:
@@ -33,14 +34,14 @@ def cmd_erase_qspi_sector(controller: JtagController) -> None:
 
 def cmd_write_qspi_binary(controller: JtagController) -> None:
     """CLI wrapper for flashing binary file."""
-    filepath = _ask_str("Path of the binary file to flash", default="bootblock.bin")
+    filepath = _ask_str("Path of the binary file to flash", default=DEFAULT_BOOTBLOCK_PATH)
     offset = _ask_int("Target flash offset", default=0x000000)
     controller.write_qspi_binary(filepath=filepath, start_offset=offset)
 
 
 def cmd_run_fsbl_bin(controller: JtagController) -> None:
     """CLI wrapper for FSBL injection."""
-    filepath = _ask_str("Path of the FSBL binary to load", default="fsbl.bin")
+    filepath = _ask_str("Path of the FSBL binary to load", default=DEFAULT_FSBL_PATH)
     controller.run_fsbl_bin(filepath=filepath)
 
 

@@ -8,6 +8,7 @@ from jtag_tap import JtagTap
 from coresight_dap import CoreSightDap
 from qspi_flash import QspiFlash
 from zynq_soc import ZynqSoc
+from zynq_constants import DEFAULT_FSBL_PATH, DEFAULT_BOOTBLOCK_PATH
 
 
 class JtagController:
@@ -44,7 +45,7 @@ class JtagController:
             return False
         return True
 
-    def run_fsbl_bin(self, filepath: str = "fsbl.bin") -> None:
+    def run_fsbl_bin(self, filepath: str = DEFAULT_FSBL_PATH) -> None:
         """Loads and executes First Stage Bootloader in OCM RAM."""
         if self._require_open():
             self.soc.load_and_run_fsbl(filepath)
@@ -95,7 +96,7 @@ class JtagController:
         if self._require_open():
             self.qspi.erase_sector(offset)
 
-    def write_qspi_binary(self, filepath: str = "bootblock.bin", start_offset: int = 0) -> None:
+    def write_qspi_binary(self, filepath: str = DEFAULT_BOOTBLOCK_PATH, start_offset: int = 0) -> None:
         """Flashes a binary file to QSPI memory."""
         if self._require_open():
             self.qspi.write_binary_file(filepath, start_offset)

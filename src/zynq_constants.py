@@ -1,5 +1,10 @@
 import struct
 
+# System Default File Paths
+DEFAULT_FSBL_PATH = "ext/fsbl.bin"
+DEFAULT_BOOTBLOCK_PATH = "ext/bootblock.bin"
+
+
 class MpsseOpcodes:
     DISABLE_CLK_DIV5      = b'\x8A'
     TURN_OFF_ADAPTIVE_CLK = b'\x97'

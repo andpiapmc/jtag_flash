@@ -1,6 +1,8 @@
 site_name: Zynq-7000 JTAG Tool
 site_description: Low-level JTAG and QSPI Flash interaction tool for Xilinx Zynq-7000.
 
+docs_dir: doc
+
 theme:
   name: material
   palette:
@@ -8,7 +10,10 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings
+  - mkdocstrings:
+        handlers:
+          python:
+            paths: ['src']
 
 markdown_extensions:
   - admonition

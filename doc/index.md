@@ -71,7 +71,7 @@ This documentation site is compiled using **MkDocs** with the **Material** theme
 
 ## 🖥 Usage
 
-Ensure your Zynq board is powered on and the JTAG cable is connected. For FSBL injection, place your `fsbl.bin` file in the root folder of the script.
+Ensure your Zynq board is powered on and the JTAG cable is connected. For FSBL injection, place your `fsbl.bin` file in the ext folder of the script.
 Launch the interactive interface:
 
 ```bash

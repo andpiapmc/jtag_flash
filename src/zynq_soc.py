@@ -5,7 +5,7 @@ Handles CPU0 halt/release, SLCR unlock/lock, OCM RAM access, and FSBL binary inj
 
 import time
 import struct
-from zynq_constants import ZynqRegs
+from zynq_constants import ZynqRegs, DEFAULT_FSBL_PATH
 
 
 class ZynqSoc:
@@ -57,7 +57,7 @@ class ZynqSoc:
     # Public Workflows
     # -------------------------------------------------------------------
 
-    def load_and_run_fsbl(self, filepath: str = "fsbl.bin"):
+    def load_and_run_fsbl(self, filepath: str = DEFAULT_FSBL_PATH):
         print(f"Targeting ARM AHB-AP -> Loading '{filepath}' into OCM...")
 
         try:

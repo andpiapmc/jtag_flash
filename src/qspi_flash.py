@@ -9,6 +9,7 @@ import struct
 from zynq_constants import (
     ZynqRegs, QspiConfig, FlashCmd,
     FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES,
+    DEFAULT_BOOTBLOCK_PATH
 )
 
 
@@ -261,7 +262,7 @@ class QspiFlash:
         self._transfer(cmd, expected_rx_len=0)
         self._wait_ready("Sector Erase")
 
-    def write_binary_file(self, filepath: str = "bootblock.bin", start_offset: int = 0) -> None:
+    def write_binary_file(self, filepath: str = DEFAULT_BOOTBLOCK_PATH, start_offset: int = 0) -> None:
         """Programs a binary file to SPI flash using Page Programming (0x02)."""
         try:
             with open(filepath, "rb") as f:
