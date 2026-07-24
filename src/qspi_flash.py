@@ -274,13 +274,17 @@ class QspiFlash:
             raise RuntimeError("Flash content verification failed after erase.")
 
     def erase_sector(self, offset: int) -> None:
-        """Erases a single 64KB Sector (0xD8) at the given offset."""
-        print(f"Erasing 64KB Sector at offset 0x{offset:06X}...")
+        """Erases a single 64KB Sector (0xD8) at the given offset (auto-aligned to 64KB)."""
+        aligned_offset = offset & ~0xFFFF
+        if aligned_offset != offset:
+            print(f"Notice: Unaligned offset 0x{offset:06X} rounded to 64KB sector boundary 0x{aligned_offset:06X}")
+
+        print(f"Erasing 64KB Sector at offset 0x{aligned_offset:06X}...")
         self._init_controller()
         self._clear_block_protection()
         self._write_enable()
 
-        cmd = bytes([FlashCmd.SE]) + offset.to_bytes(3, 'big')
+        cmd = bytes([FlashCmd.SE]) + aligned_offset.to_bytes(3, 'big')
         self._transfer(cmd, expected_rx_len=0)
         self._wait_ready("Sector Erase")
 
