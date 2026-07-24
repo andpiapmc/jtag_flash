@@ -780,7 +780,7 @@ MpsseOpcodes.SEND_IMMEDIATE      = 0x87
 <ul>
 <li>For large memory writes (for example, writing an FSBL or bulk RAM loading), the host can pack hundreds or thousands of JTAG transactions into a single Python <code>bytearray</code> (or similar) and send it in large USB bulk writes (typical practice: chunk sizes tuned to device/driver limits, e.g., 64 KB chunks).</li>
 <li>This reduces USB overhead and maximizes the rate at which the FTDI MPSSE can toggle the JTAG pins and accept transactions.</li>
-<li>In this project the <code>_write_mem32_bulk()</code> pattern packs many 32-bit write sequences into large MPSSE command buffers to accelerate AHB-AP writes.</li>
+<li>In this project the <code>write_mem32_bulk()</code> pattern (in <code>coresight_dap.py</code>, used by <code>zynq_soc.py::load_and_run_fsbl()</code>) packs many 32-bit write sequences into large MPSSE command buffers to accelerate AHB-AP writes - see <a href="../fsbl_injection/">FSBL Injection</a> for the full picture.</li>
 </ul>
 <h2 id="practical-considerations-and-caveats">Practical considerations and caveats</h2>
 <ul>

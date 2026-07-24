@@ -715,10 +715,12 @@ This project leverages the hardware MPSSE engine of FTDI chips (e.g., FT232H, us
 </ul>
 <hr />
 <h2 id="project-architecture">🏗 Project Architecture</h2>
-<p>The codebase is strictly refactored into three main modules to ensure maximum maintainability:</p>
+<p>The codebase is organized in strict layers, from raw USB bytes up to complete user workflows, so that no file mixes protocol bit-banging with SoC-specific logic. See <a href="architecture/">Project Architecture</a> for the full breakdown; in short:</p>
 <ol>
-<li><strong><code>zynq_constants.py</code></strong>: The hardware vocabulary. Contains all FTDI opcodes, register addresses (CoreSight, Zynq SLCR, QSPI), logical constants, and bitmasks.</li>
-<li><strong><code>jtag_controller.py</code></strong>: The core engine. Manages the native USB interface, exposes TMS state machine primitives, and orchestrates complex flows (e.g., FSBL injection or QSPI queries).</li>
+<li><strong><code>zynq_constants.py</code></strong>: The hardware vocabulary - FTDI opcodes, register addresses (CoreSight, Zynq SLCR, QSPI), logical constants, and bitmasks.</li>
+<li><strong><code>mpsse_transport.py</code> → <code>jtag_tap.py</code> → <code>coresight_dap.py</code></strong>: Raw FTDI/MPSSE transport, generic JTAG TAP protocol, and ARM CoreSight DAP / memory access, each building on the one before it.</li>
+<li><strong><code>zynq_soc.py</code></strong> and <strong><code>qspi_flash.py</code></strong>: SoC-specific workflows (FSBL injection, OCM test, QSPI flash management) built on the DAP memory interface.</li>
+<li><strong><code>jtag_controller.py</code></strong>: The facade. Wires every layer together and exposes one flat method per CLI action.</li>
 <li><strong><code>main.py</code></strong>: The application entry-point and Command Line Interface (CLI) handler.</li>
 </ol>
 <hr />
@@ -767,7 +769,7 @@ This project leverages the hardware MPSSE engine of FTDI chips (e.g., FT232H, us
 </li>
 </ol>
 <h2 id="usage">🖥 Usage</h2>
-<p>Ensure your Zynq board is powered on and the JTAG cable is connected. For FSBL injection, place your <code>fsbl.bin</code> file in the ext folder of the script.
+<p>Ensure your Zynq board is powered on and the JTAG cable is connected. For FSBL injection or QSPI programming, place your <code>fsbl.bin</code> file in the <code>ext/</code> folder next to the script (these are the tool's default paths - both prompts also accept a custom path).
 Launch the interactive interface:</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>main.py
 </code></pre></div>
@@ -781,8 +783,13 @@ Launch the interactive interface:</p>
 5. Read FPGA USERCODE
 6. Test ARM DAP
 7. Test OCM RAM
-8. Load &amp; Run fsbl.bin
+8. Load &amp; Run FSBL binary
 9. Read QSPI JEDEC ID
+10. Erase QSPI Flash (full chip)
+11. Erase QSPI Sector (64KB, ask offset)
+12. Program QSPI Flash (ask file + offset)
+13. Enable QSPI Quad Mode
+14. Disable QSPI Quad Mode
 ?. Help
 ----------------------------------------
 </code></pre></div>
@@ -791,8 +798,9 @@ Launch the interactive interface:</p>
 <li>Press <code>1</code> to verify the FTDI probe is detected.</li>
 <li>Press <code>2</code> to open the channel and initialize the TCK (defaults to 15 MHz).</li>
 <li>Press <code>4</code> to validate the physical integrity of the JTAG chain.</li>
-<li>Press <code>8</code> to inject the FSBL and unlock hardware peripherals.</li>
-<li>Press <code>9</code> to communicate with the QSPI Flash memory.</li>
+<li>Press <code>9</code> to confirm the QSPI flash responds and identify its manufacturer/capacity.</li>
+<li>Press <code>10</code> or <code>11</code> to erase the chip or a single 64KB sector, then <code>12</code> to program a binary at a chosen offset.</li>
+<li>Press <code>8</code> if you need to inject and run an FSBL directly from JTAG, bypassing the normal boot sequence (see <a href="fsbl_injection/">FSBL Injection</a>).</li>
 </ol>
 <h2 id="disclaimer">⚠️ Disclaimer</h2>
 <p>This tool interacts directly with low-level hardware registers. Injecting incorrect memory addresses or incorrectly driving reset lines via AHB-AP can cause the SoC to hang temporarily (resolvable with a board power-cycle). Use with caution.</p>

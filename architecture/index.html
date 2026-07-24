@@ -306,27 +306,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-the-core-engine-jtag_controllerpy" class="md-nav__link">
+  <a href="#2-raw-transport-mpsse_transportpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. The Core Engine (jtag_controller.py)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. The Core Engine (jtag_controller.py)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#internal-abstraction-layers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Internal Abstraction Layers
+        2. Raw Transport (mpsse_transport.py)
       
     </span>
   </a>
   
 </li>
+      
+        <li class="md-nav__item">
+  <a href="#3-generic-jtag-protocol-jtag_tappy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Generic JTAG Protocol (jtag_tap.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-arm-coresight-dap-coresight_dappy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. ARM CoreSight DAP (coresight_dap.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. ARM CoreSight DAP (coresight_dap.py)">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#the-bulk-engine" class="md-nav__link">
@@ -345,10 +356,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-the-user-interface-mainpy" class="md-nav__link">
+  <a href="#5-soc-specific-workflows-zynq_socpy-qspi_flashpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. The User Interface (main.py)
+        5. SoC-Specific Workflows (zynq_soc.py, qspi_flash.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-facade-jtag_controllerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The Facade (jtag_controller.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-user-interface-mainpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The User Interface (main.py)
       
     </span>
   </a>
@@ -547,27 +580,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-the-core-engine-jtag_controllerpy" class="md-nav__link">
+  <a href="#2-raw-transport-mpsse_transportpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. The Core Engine (jtag_controller.py)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. The Core Engine (jtag_controller.py)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#internal-abstraction-layers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Internal Abstraction Layers
+        2. Raw Transport (mpsse_transport.py)
       
     </span>
   </a>
   
 </li>
+      
+        <li class="md-nav__item">
+  <a href="#3-generic-jtag-protocol-jtag_tappy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Generic JTAG Protocol (jtag_tap.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-arm-coresight-dap-coresight_dappy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. ARM CoreSight DAP (coresight_dap.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. ARM CoreSight DAP (coresight_dap.py)">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#the-bulk-engine" class="md-nav__link">
@@ -586,10 +630,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-the-user-interface-mainpy" class="md-nav__link">
+  <a href="#5-soc-specific-workflows-zynq_socpy-qspi_flashpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. The User Interface (main.py)
+        5. SoC-Specific Workflows (zynq_soc.py, qspi_flash.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-facade-jtag_controllerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The Facade (jtag_controller.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-user-interface-mainpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The User Interface (main.py)
       
     </span>
   </a>
@@ -625,49 +691,70 @@
 
 
 <h1 id="project-architecture">Project Architecture</h1>
-<p>The <code>jtag_flash</code> tool is built with a strict <strong>Separation of Concerns (SoC)</strong> philosophy. Managing raw hardware protocols (like MPSSE and JTAG) alongside complex SoC workflows (like ARM CoreSight injection) can easily lead to "spaghetti code".</p>
-<p>To prevent this and eliminate cryptic "magic numbers", the project is divided into three distinct layers.</p>
+<p>The <code>jtag_flash</code> tool is built with a strict <strong>layered architecture</strong>: each file owns exactly one level of abstraction, from raw USB bytes up to complete user-facing workflows. Every layer only talks to the one directly below it, which keeps the "spaghetti code" risk that comes from mixing raw protocol bit-banging with complex SoC workflows firmly under control - and eliminates cryptic "magic numbers" along the way.</p>
+<p>The stack, from lowest to highest level:</p>
+<div class="highlight"><pre><span></span><code>main.py            CLI: menu, input, dispatch
+    ↓
+jtag_controller.py Facade: wires everything together, flat public API
+    ↓                 ↓
+zynq_soc.py       qspi_flash.py    (SoC-specific workflows)
+    ↓________________↓
+coresight_dap.py               (ARM CoreSight DAP / AHB-AP memory access)
+    ↓
+jtag_tap.py                    (generic IEEE 1149.1 JTAG TAP protocol)
+    ↓
+mpsse_transport.py             (raw FTDI/MPSSE USB bytes)
+
+zynq_constants.py  ← the hardware vocabulary, imported by every layer above
+</code></pre></div>
 <hr />
 <h2 id="1-the-hardware-vocabulary-zynq_constantspy">1. The Hardware Vocabulary (<code>zynq_constants.py</code>)</h2>
-<p>This module acts as the definitive dictionary for the entire project. It contains absolutely <strong>zero execution logic</strong> and only maps the physical and logical constants required to drive the hardware.</p>
+<p>This module acts as the definitive dictionary for the entire project. It contains <strong>zero execution logic</strong> and only maps the physical and logical constants required to drive the hardware.</p>
 <p>Key components include:</p>
 <ul>
-<li><strong><code>MpsseOpcodes</code></strong>: FTDI-specific byte commands used to configure the engine and shift data.</li>
+<li><strong><code>MpsseOpcodes</code></strong> and <strong><code>TmsCommands</code></strong>: FTDI-specific byte commands and pre-packed TAP state-machine navigation sequences.</li>
 <li><strong><code>JtagInstr</code></strong>: JTAG Instruction Register values that select the FPGA boundary scan or the ARM CoreSight DAP.</li>
-<li><strong><code>CoreSightRegs</code></strong> and <strong><code>DapReq</code></strong>: Debug Port and Access Port register layouts, bitmasks, and transaction formats.</li>
-<li><strong><code>AhbApRegs</code></strong> and <strong><code>ZynqRegs</code></strong>: Memory map addresses for Zynq internal buses and peripherals, including SLCR, OCM, and the QSPI controller.</li>
+<li><strong><code>CoreSightRegs</code></strong>, <strong><code>DapReq</code></strong>, <strong><code>AhbApRegs</code></strong>: Debug Port and Access Port register layouts, bitmasks, and transaction formats.</li>
+<li><strong><code>ZynqRegs</code></strong>: Memory-map addresses for SLCR, OCM, and the QSPI controller.</li>
+<li><strong><code>QspiConfig</code></strong> and <strong><code>FlashCmd</code></strong>: QSPI controller bitfields and standard SPI-NOR flash opcodes.</li>
 <li><strong><code>FLASH_MANUFACTURERS</code></strong> and <strong><code>FLASH_MEMORY_TYPES</code></strong>: JEDEC decoder dictionaries for SPI flash identification.</li>
 </ul>
-<p>This separation keeps the core logic clean, self-documenting, and safe from typo-induced hardware crashes.</p>
+<p>This separation keeps the logic in every other file self-documenting and safe from typo-induced hardware crashes.</p>
 <hr />
-<h2 id="2-the-core-engine-jtag_controllerpy">2. The Core Engine (<code>jtag_controller.py</code>)</h2>
-<p><code>JtagController</code> is the workhorse of the tool. It is built in layers that descend from user workflows to raw JTAG bit-banging.</p>
-<h3 id="internal-abstraction-layers">Internal Abstraction Layers</h3>
-<ul>
-<li><strong>Public API (Workflows)</strong>: methods such as <code>run_fsbl_bin()</code> and <code>read_qspi_jedec_id()</code>. These orchestrate complete operations for the user.</li>
-<li><strong>Intermediate API (CoreSight)</strong>: methods such as <code>test_arm_dap()</code> and <code>write_mem32()</code>. These handle ARM DAP transactions and route 32-bit accesses over the internal AHB bus.</li>
-<li><strong>Atomic API (JTAG &amp; MPSSE)</strong>: private methods such as <code>_shift_dr()</code>, <code>_shift_ir()</code>, and <code>_tms_to_shift_dr()</code>. These only care about shifting bits on the physical JTAG lines (TMS/TDI/TDO) according to the IEEE 1149.1 TAP state machine.</li>
-</ul>
+<h2 id="2-raw-transport-mpsse_transportpy">2. Raw Transport (<code>mpsse_transport.py</code>)</h2>
+<p><code>MpsseTransport</code> owns the FTDI device handle. It knows nothing about JTAG - only how to open the USB endpoint, configure the MPSSE engine (clock divisor, GPIO idle state), and push/pull raw bytes (<code>write()</code>, <code>read()</code>, <code>purge_rx()</code>). It also exposes <code>reset_tap_to_idle()</code>, the byte sequence every higher layer uses to force the TAP into a known state before an operation.</p>
+<h2 id="3-generic-jtag-protocol-jtag_tappy">3. Generic JTAG Protocol (<code>jtag_tap.py</code>)</h2>
+<p><code>JtagTap</code> implements the IEEE 1149.1 TAP state machine on top of a transport: the private <code>_shift_bits()</code> primitive shifts N bits into IR or DR and reads TDO back, and the public <code>shift_ir()</code> / <code>shift_dr()</code> build on it to target a specific TAP in the chain (0 = FPGA/PL, 1 = ARM DAP). <code>scan_chain()</code> and <code>read_fpga_usercode()</code> are chain-level operations built the same way. This layer is target-agnostic - it would work on any JTAG-compliant chain.</p>
+<h2 id="4-arm-coresight-dap-coresight_dappy">4. ARM CoreSight DAP (<code>coresight_dap.py</code>)</h2>
+<p><code>CoreSightDap</code> implements DPACC/APACC transactions on top of a <code>JtagTap</code>: the private <code>_dap_write()</code> / <code>_dap_read()</code> / <code>_init_ahb_ap()</code> handle the raw 35-bit ARM debug protocol, and the public API - <code>connect()</code>, <code>write_mem32()</code>, <code>read_mem32()</code>, <code>write_mem32_bulk()</code>, <code>clear_sticky_errors()</code> - exposes a plain "read/write a physical memory address" interface used by every layer above it. Only one Access Port is used anywhere in this project (referred to as the AHB-AP): all peripheral, SLCR, and OCM access goes through the same memory window.</p>
 <h3 id="the-bulk-engine">The Bulk Engine</h3>
-<p>A critical feature is <code>_write_mem32_bulk()</code>. Instead of waiting for a USB acknowledgment on every memory write, it concatenates many AHB-AP transactions into a single MPSSE payload. This reduces USB latency and lets the OCM SRAM be flooded with the FSBL binary in a fraction of the time.</p>
-<hr />
-<h2 id="3-the-user-interface-mainpy">3. The User Interface (<code>main.py</code>)</h2>
+<p><code>write_mem32_bulk()</code> is the one method that steps outside the generic read/write pattern. Instead of a full IR/DR round-trip per word, it builds raw MPSSE payloads directly and batches hundreds of AHB-AP write transactions into a single USB write. This is what lets an entire FSBL binary be streamed into OCM in a fraction of a second - see <a href="../fsbl_injection/">FSBL Injection</a> and <a href="../mpsse_protocol/">MPSSE Protocol</a> for the details.</p>
+<h2 id="5-soc-specific-workflows-zynq_socpy-qspi_flashpy">5. SoC-Specific Workflows (<code>zynq_soc.py</code>, <code>qspi_flash.py</code>)</h2>
+<p>These two files sit at the same layer and both build only on <code>CoreSightDap</code>'s memory interface:</p>
+<ul>
+<li><strong><code>ZynqSoc</code></strong>: SLCR unlock/lock, peripheral clock gating (<code>enable_peripheral_clock()</code>, <code>enable_qspi_ref_clock()</code>), CPU0 halt/release, <code>load_and_run_fsbl()</code>, and <code>test_ocm_ram()</code>.</li>
+<li><strong><code>QspiFlash</code></strong>: brings up the QSPI controller (<code>_init_controller()</code>), implements the manual SPI bit-banging transfer engine (<code>_manual_transfer()</code>), and exposes the flash workflows used by the CLI - <code>read_jedec_id()</code>, <code>erase_chip()</code>, <code>erase_sector()</code>, <code>write_binary_file()</code>, <code>enable_quad_mode()</code> / <code>disable_quad_mode()</code>.</li>
+</ul>
+<h2 id="6-the-facade-jtag_controllerpy">6. The Facade (<code>jtag_controller.py</code>)</h2>
+<p><code>JtagController</code> composes the layers above (<code>transport → tap → dap → soc / qspi</code>) and exposes one flat method per CLI action, with a shared <code>_require_open()</code> guard. This is intentionally a thin layer - if you want to know <em>how</em> something works, follow the chain down through the files above, not this one.</p>
+<h2 id="7-the-user-interface-mainpy">7. The User Interface (<code>main.py</code>)</h2>
 <p>The application entry point is intentionally lightweight. It performs:</p>
 <ul>
 <li>CLI menu display.</li>
-<li>standard input capture (<code>stdin</code>).</li>
-<li>routing of user choices via <code>match/case</code> to <code>JtagController</code> methods.</li>
-<li>safe cleanup when users abort (<code>Ctrl+C</code>), closing the FTDI connection and avoiding port locking.</li>
+<li>Standard input capture (<code>stdin</code>).</li>
+<li>Routing of user choices via a <code>menu_options</code> dictionary lookup (<code>option["func"](controller)</code>), not <code>match/case</code>.</li>
+<li>Cleanup on exit, including closing the FTDI connection so the port isn't left locked.</li>
 </ul>
 <hr />
 <h2 id="data-flow-summary">Data Flow Summary</h2>
 <p>When the user requests FSBL loading, the flow is:</p>
 <ol>
-<li><strong><code>main.py</code></strong> calls <code>jtag.run_fsbl_bin()</code>.</li>
-<li><strong><code>jtag_controller.py</code></strong> reads the binary, halts/reset the target via CoreSight, and breaks the data into word chunks.</li>
-<li>The bulk engine converts those words into DAP requests using constants from <strong><code>zynq_constants.py</code></strong>.</li>
-<li>The atomic JTAG layer wraps DAP requests into MPSSE opcodes.</li>
-<li>The <code>ftd2xx</code> driver sends the final byte stream to the USB-attached FTDI hardware.</li>
+<li><strong><code>main.py</code></strong> calls <code>controller.run_fsbl_bin()</code>.</li>
+<li><strong><code>jtag_controller.py</code></strong> delegates to <code>soc.load_and_run_fsbl()</code>.</li>
+<li><strong><code>zynq_soc.py</code></strong> reads the binary, halts CPU0 via the SLCR reset register, and breaks the data into 32-bit word chunks.</li>
+<li><strong><code>coresight_dap.py</code></strong>'s bulk engine converts those words into DAP write requests using constants from <strong><code>zynq_constants.py</code></strong>.</li>
+<li><strong><code>jtag_tap.py</code></strong> / <strong><code>mpsse_transport.py</code></strong> wrap the requests into MPSSE opcodes and stream them over USB.</li>
+<li><code>ftd2xx</code> sends the final byte stream to the FTDI hardware, which drives TCK/TMS/TDI and samples TDO.</li>
 </ol>
 
 

@@ -419,6 +419,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#what-this-tool-actually-exercises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📌 What this tool actually exercises
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -545,6 +556,17 @@
     <span class="md-ellipsis">
       
         🛣️ The Internal Buses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-tool-actually-exercises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📌 What this tool actually exercises
       
     </span>
   </a>
@@ -683,6 +705,15 @@
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="what-this-tool-actually-exercises">📌 What this tool actually exercises</h2>
+<p>The table above describes the general CoreSight topology available on Zynq-7000 silicon. This specific tool is deliberately simpler than that:</p>
+<ul>
+<li><strong>A single Access Port does everything.</strong> <code>coresight_dap.py</code> opens one AHB-AP memory window (via <code>connect()</code>) and uses it for <em>all</em> memory-mapped access - OCM, SLCR, and the QSPI controller alike. There is no separate APB-AP transaction path in the code; the distinction in the table above is architectural background, not a description of this codebase's routing.</li>
+<li><strong>FPGA/PL access bypasses the DAP entirely.</strong> <code>read_fpga_usercode()</code> doesn't go through the JTAG-AP bridge shown in the diagram above. Instead, it addresses the FPGA's own TAP directly as a second device in the same physical JTAG chain (<code>tap_index=0</code>, versus <code>tap_index=1</code> for the ARM DAP) - see <code>jtag_tap.py::shift_ir()</code> / <code>shift_dr()</code>. This is a simpler and more direct path, and it's why FPGA USERCODE reads work even without ever powering up the CoreSight debug domains.</li>
+<li><strong>No CoreSight debug-halt/resume is used.</strong> Even CPU control (see <a href="../fsbl_injection/">FSBL Injection</a>) goes through the SLCR reset line rather than the Cortex-A9's own debug registers.</li>
+</ul>
+<p>If you extend this tool to add real per-core debug control (breakpoints, register inspection, single-stepping), that's where you would start using the APB-AP path shown in the table for the first time.</p>
 
 
 

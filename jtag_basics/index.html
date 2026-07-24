@@ -680,7 +680,7 @@
 </ul>
 <h2 id="the-tap-controller-state-machine">The TAP Controller State Machine</h2>
 <p>Every JTAG-compliant chip contains a 16-states finite state machine called the <strong>Test Access Port (TAP) Controller</strong>. Navigation through these states is controlled entirely by the sequence of <code>1</code>s and <code>0</code>s sent over the <strong>TMS</strong> (Test Mode Select) signal and occur strictly on the rising edge of the <code>TCK</code> (Test Clock) signal.</p>
-<p>Our controller in <code>jtag_controller.py</code> heavily relies on these specific states:</p>
+<p>Our TAP driver in <code>jtag_tap.py</code> heavily relies on these specific states:</p>
 <ul>
 <li><strong>Test-Logic-Reset (TLR):</strong> The safe/reset state. Holding TMS <code>HIGH</code> for 5 consecutive clock cycles guarantees a return to TLR from <em>any</em> state.</li>
 <li><strong>Run-Test/Idle:</strong> A resting state where the TAP is active but not shifting data.</li>
@@ -723,7 +723,7 @@
 <li><strong>Update-DR:</strong> Latches the newly shifted data into the target hardware register.</li>
 </ul>
 <h3 id="example-navigating-to-shift-dr">Example: Navigating to Shift-DR</h3>
-<p>To move from <code>Test-Logic-Reset</code> to <code>Shift-DR</code>, the TMS pin must receive the sequence <code>0 -&gt; 1 -&gt; 0 -&gt; 0</code>. In our code, this is handled transparently by the <code>_tms_to_shift_dr()</code> helper method.</p>
+<p>To move from <code>Test-Logic-Reset</code> to <code>Shift-DR</code>, the TMS pin must receive the sequence <code>0 -&gt; 1 -&gt; 0 -&gt; 0</code>. In our code this exact sequence is pre-packed as the <code>TmsCommands.IDLE_TO_SHIFT_DR</code> MPSSE payload in <code>zynq_constants.py</code>, and consumed by <code>JtagTap._shift_bits()</code> in <code>jtag_tap.py</code> at the start of every DR shift.</p>
 
 
 
