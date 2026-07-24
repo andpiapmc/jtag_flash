@@ -8,7 +8,7 @@ from jtag_tap import JtagTap
 from coresight_dap import CoreSightDap
 from qspi_flash import QspiFlash
 from zynq_soc import ZynqSoc
-from zynq_constants import DEFAULT_FSBL_PATH, DEFAULT_BOOTBLOCK_PATH
+from zynq_constants import DEFAULT_FSBL_PATH
 
 
 class JtagController:
@@ -95,11 +95,6 @@ class JtagController:
         """Erases a specific 64KB sector."""
         if self._require_open():
             self.qspi.erase_sector(offset)
-
-    def write_qspi_binary(self, filepath: str = DEFAULT_BOOTBLOCK_PATH, start_offset: int = 0) -> None:
-        """Flashes a binary file to QSPI memory."""
-        if self._require_open():
-            self.qspi.write_binary_file(filepath, start_offset)
 
     def enable_qspi_quad_mode(self) -> None:
         """Enables Quad SPI Mode."""

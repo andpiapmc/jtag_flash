@@ -5,7 +5,7 @@ Provides interactive menu interfaces for debugging and flash programming.
 
 import sys
 from jtag_controller import JtagController
-from zynq_constants import DEFAULT_FSBL_PATH, DEFAULT_BOOTBLOCK_PATH
+from zynq_constants import DEFAULT_FSBL_PATH
 
 
 def _ask_int(prompt: str, default: int) -> int:
@@ -32,13 +32,6 @@ def cmd_erase_qspi_sector(controller: JtagController) -> None:
     controller.erase_qspi_sector(offset=offset)
 
 
-def cmd_write_qspi_binary(controller: JtagController) -> None:
-    """CLI wrapper for flashing binary file."""
-    filepath = _ask_str("Path of the binary file to flash", default=DEFAULT_BOOTBLOCK_PATH)
-    offset = _ask_int("Target flash offset", default=0x000000)
-    controller.write_qspi_binary(filepath=filepath, start_offset=offset)
-
-
 def cmd_run_fsbl_bin(controller: JtagController) -> None:
     """CLI wrapper for FSBL injection."""
     filepath = _ask_str("Path of the FSBL binary to load", default=DEFAULT_FSBL_PATH)
@@ -58,9 +51,8 @@ menu_options = {
     "9": {"label": "Read QSPI JEDEC ID", "func": lambda c: c.read_qspi_jedec_id()},
     "10": {"label": "Erase QSPI Flash (full chip)", "func": lambda c: c.erase_qspi_chip()},
     "11": {"label": "Erase QSPI Sector (64KB, ask offset)", "func": cmd_erase_qspi_sector},
-    "12": {"label": "Program QSPI Flash (ask file + offset)", "func": cmd_write_qspi_binary},
-    "13": {"label": "Enable QSPI Quad Mode", "func": lambda c: c.enable_qspi_quad_mode()},
-    "14": {"label": "Disable QSPI Quad Mode", "func": lambda c: c.disable_qspi_quad_mode()},
+    "12": {"label": "Enable QSPI Quad Mode", "func": lambda c: c.enable_qspi_quad_mode()},
+    "13": {"label": "Disable QSPI Quad Mode", "func": lambda c: c.disable_qspi_quad_mode()},
     "?": {"label": "Help", "func": lambda c: show_menu()},
 }
 

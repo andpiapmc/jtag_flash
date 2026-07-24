@@ -7,8 +7,7 @@ import time
 import struct
 from zynq_constants import (
     ZynqRegs, QspiConfig, FlashCmd,
-    FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES,
-    DEFAULT_BOOTBLOCK_PATH
+    FLASH_MANUFACTURERS, FLASH_MEMORY_TYPES
 )
 
 
@@ -73,7 +72,7 @@ class QspiFlash:
     def _manual_transfer(self, tx_bytes: bytes, expected_rx_len: int | None = None) -> bytes:
         """Executes a manual SPI transfer over the QSPI controller registers."""
         if len(tx_bytes) > 252:
-            raise ValueError("Transfer exceeds QSPI TX FIFO depth.")
+            raise ValueError("Transfer exceeds QSPI TX FIFO depth (max 252 bytes).")
 
         self.dap.clear_sticky_errors()
 
@@ -284,41 +283,6 @@ class QspiFlash:
         cmd = bytes([FlashCmd.SE]) + offset.to_bytes(3, 'big')
         self._transfer(cmd, expected_rx_len=0)
         self._wait_ready("Sector Erase")
-
-    def write_binary_file(self, filepath: str = DEFAULT_BOOTBLOCK_PATH, start_offset: int = 0) -> None:
-        """Programs a binary file to SPI flash respecting 256-byte Page Boundaries."""
-        try:
-            with open(filepath, "rb") as f:
-                data = f.read()
-        except FileNotFoundError:
-            print(f"ERROR: File '{filepath}' not found!")
-            return
-
-        print(f"Flashing '{filepath}' ({len(data)} bytes) at 0x{start_offset:06X}")
-        self._init_controller()
-
-        t0 = time.time()
-        file_idx = 0
-        total_len = len(data)
-
-        while file_idx < total_len:
-            current_offset = start_offset + file_idx
-            # Calculate remaining room in the current 256-byte page
-            page_offset = current_offset % 256
-            chunk_size = min(256 - page_offset, total_len - file_idx)
-
-            chunk = data[file_idx: file_idx + chunk_size]
-
-            self._write_enable()
-            cmd = bytes([FlashCmd.PP]) + current_offset.to_bytes(3, 'big') + chunk
-            self._transfer(cmd, expected_rx_len=0)
-            self._wait_ready_fast()
-
-            file_idx += chunk_size
-            progress = (file_idx / total_len) * 100
-            print(f" -> Progress: {progress:05.2f}%", end='\r')
-
-        print(f"\nSUCCESS: Flashed in {time.time()-t0:.2f}s.")
 
     def _set_quad_mode(self, enable: bool) -> None:
         """Sets or clears the Quad-Enable (QE) bit in the flash status registers."""
