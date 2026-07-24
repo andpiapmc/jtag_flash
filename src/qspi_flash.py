@@ -1,7 +1,6 @@
 """
 Zynq-7000 QSPI Controller and SPI-NOR Flash Memory Driver.
 Handles memory-mapped I/O manual transfers, status polling, and SPI flash workflows.
-(FIXED: Added initial settling delay in _wait_ready to prevent WIP race condition)
 """
 
 import time
@@ -32,12 +31,15 @@ class QspiFlash:
         self.soc.enable_qspi_ref_clock()
 
         self.soc.slcr_unlock()
-        # MIO 1-6 set to QSPI (0x02) with internal pull-ups enabled (Bit 12) for WP/HOLD
+        # MIO 1-6 (SCLK/CS/MOSI/WP/HOLD/MISO) stay muxed to QSPI, with each
+        # pin's internal pull-up enabled - this is what keeps WP#/HOLD# from
+        # floating when the flash has Quad-Enable set, without needing to
+        # steal the pins away as GPIO outputs.
         for pin in range(1, 7):
-            addr = ZynqRegs.SLCR_BASE + 0x700 + (pin * 4)
+            addr = ZynqRegs.SLCR_MIO_CTRL_0 + (pin * 4)
             val = self.dap.read_mem32(addr)
-            val |= (1 << 12)
-            val = (val & ~0xFF) | 0x02
+            val |= ZynqRegs.MIO_PULLUP_BIT
+            val = (val & ~0xFF) | ZynqRegs.MIO_PIN_MUX_QSPI
             self.dap.write_mem32(addr, val)
         self.soc.slcr_lock()
 
@@ -47,11 +49,8 @@ class QspiFlash:
         # Reset QSPI state machine
         self.dap.write_mem32(ZynqRegs.QSPI_ENABLE, 0x00000000)
 
-        # Zynq-7000 QSPI Manual Mode Configuration:
-        # Bit 31: Manual IF | Bit 14: Manual Start EN | Bit 3-5: Div /16 | Bit 1: Manual CS EN | Bit 0: Master
-        clean_manual_cfg = (1 << 31) | (1 << 14) | (0x3 << 3) | (1 << 1) | 1
-
-        self.dap.write_mem32(ZynqRegs.QSPI_CONFIG, clean_manual_cfg)
+        # Zynq-7000 QSPI Manual Mode Configuration - see QspiConfig.MANUAL_BASE_CFG
+        self.dap.write_mem32(ZynqRegs.QSPI_CONFIG, QspiConfig.MANUAL_BASE_CFG)
         self.dap.write_mem32(ZynqRegs.QSPI_STATUS, 0x0000007F)
         self.dap.write_mem32(ZynqRegs.QSPI_ENABLE, 0x00000001)
         time.sleep(0.005)
@@ -78,10 +77,9 @@ class QspiFlash:
 
         self.dap.clear_sticky_errors()
 
-        base_cfg = (1 << 31) | (1 << 14) | (0x3 << 3) | (1 << 1) | 1
-        safe_config_idle = base_cfg | QspiConfig.PCS_ALL_HIGH
-        config_cs0 = base_cfg & ~QspiConfig.PCS_ALL_HIGH
-        config_trig = config_cs0 | (1 << 16)  # Bit 16: Manual Start Trigger
+        safe_config_idle = QspiConfig.MANUAL_BASE_CFG | QspiConfig.PCS_ALL_HIGH
+        config_cs0 = QspiConfig.MANUAL_BASE_CFG & ~QspiConfig.PCS_ALL_HIGH
+        config_trig = config_cs0 | QspiConfig.MANUAL_START
 
         self.dap.write_mem32(ZynqRegs.QSPI_CONFIG, safe_config_idle)
         self.dap.write_mem32(ZynqRegs.QSPI_STATUS, 0x0000007F)
@@ -118,15 +116,15 @@ class QspiFlash:
             timeout = time.time() + 0.5
             while True:
                 cfg = self.dap.read_mem32(ZynqRegs.QSPI_CONFIG)
-                sts = self.dap.read_mem32(ZynqRegs.QSPI_STATUS)
-                if not (cfg & (1 << 16)) or (sts & (1 << 2)):
+                if not (cfg & QspiConfig.MANUAL_START):
                     break
                 if time.time() > timeout:
                     self.dap.write_mem32(ZynqRegs.QSPI_CONFIG, safe_config_idle)
                     raise TimeoutError("QSPI TX timeout waiting for command completion.")
 
-            time.sleep(0.001)
             self.dap.write_mem32(ZynqRegs.QSPI_CONFIG, safe_config_idle)
+            # Wait for CS edge rising
+            time.sleep(0.005)
             return b''
 
         # RX-Data transaction handling
@@ -163,6 +161,10 @@ class QspiFlash:
             return 0x00
         return response[1] if len(response) > 1 else 0x00
 
+    def _read_jedec_raw(self) -> bytes:
+        """Returns the raw 4-byte JEDEC ID response (manufacturer, type, capacity)."""
+        return self._transfer(bytes([FlashCmd.RDID, 0x00, 0x00, 0x00]), expected_rx_len=4)
+
     def _write_enable(self) -> None:
         """Sends Write Enable (WREN) instruction and verifies Write Enable Latch (WEL)."""
         for _ in range(5):
@@ -174,8 +176,14 @@ class QspiFlash:
         raise RuntimeError("Flash did not set WEL after WREN instruction")
 
     def _wait_ready(self, operation_name: str = "Operation") -> None:
-        """Polls the Write-In-Progress (WIP) bit until the flash becomes idle."""
-        time.sleep(0.05)  # Initial delay to allow flash hardware to set WIP bit
+        """Polls the Write-In-Progress (WIP) bit with progress dots for long operations (Erase)."""
+        time.sleep(0.1)  # Settling delay to allow flash hardware to set WIP bit
+        for _ in range(5):
+            status = self._read_status(FlashCmd.RDSR)
+            if status & FlashCmd.SR1_WIP:
+                break
+            time.sleep(0.02)
+
         while True:
             status = self._read_status(FlashCmd.RDSR)
             if not (status & FlashCmd.SR1_WIP):
@@ -183,6 +191,17 @@ class QspiFlash:
                 break
             print('.', end='', flush=True)
             time.sleep(0.1)
+
+    def _wait_ready_fast(self, timeout_sec: float = 2.0) -> None:
+        """Low-latency WIP polling for fast operations (Page Programming)."""
+        time.sleep(0.001)
+        timeout = time.time() + timeout_sec
+        while time.time() < timeout:
+            status = self._read_status(FlashCmd.RDSR)
+            if not (status & FlashCmd.SR1_WIP):
+                return
+            time.sleep(0.001)
+        raise TimeoutError("Timeout waiting for Flash write operation to complete.")
 
     def _read_flash_data(self, address: int, length: int) -> bytes:
         """Reads arbitrary data blocks from the specified flash memory address."""
@@ -193,13 +212,7 @@ class QspiFlash:
             return self._read_flash_data(address, 128) + self._read_flash_data(address + 128, length - 128)
 
         cmd = bytes([FlashCmd.READ]) + address.to_bytes(3, 'big') + bytes(length)
-        data = self._transfer(cmd, expected_rx_len=4 + length)[4:]
-
-        if len(data) == length and any(b != 0x00 for b in data):
-            return data
-
-        cmd = bytes([FlashCmd.FAST_READ]) + address.to_bytes(3, 'big') + b'\x00' + bytes(length)
-        return self._transfer(cmd, expected_rx_len=5 + length)[5:]
+        return self._transfer(cmd, expected_rx_len=4 + length)[4:]
 
     def _verify_erased(self, address: int = 0, length: int = 64) -> bool:
         """Verifies if the specified memory region is completely erased (0xFF)."""
@@ -210,6 +223,14 @@ class QspiFlash:
         print(f" -> Erase verification FAILED at offset 0x{first_bad:02X}: {data[first_bad:first_bad+16].hex()}")
         return False
 
+    def _clear_block_protection(self) -> None:
+        """Clears Block Protect bits in Status Register if enabled."""
+        status1 = self._read_status(FlashCmd.RDSR)
+        if status1 & 0x3C:
+            self._write_enable()
+            self._transfer(bytes([FlashCmd.WRSR, status1 & ~0x3C]), expected_rx_len=0)
+            time.sleep(0.01)
+
     # -------------------------------------------------------------------
     # Public SPI-NOR Flash Workflows
     # -------------------------------------------------------------------
@@ -217,7 +238,7 @@ class QspiFlash:
     def read_jedec_id(self) -> None:
         """Reads JEDEC ID (0x9F) and prints flash manufacturer details."""
         self._init_controller()
-        response = self._transfer(bytes([FlashCmd.RDID, 0x00, 0x00, 0x00]), expected_rx_len=4)
+        response = self._read_jedec_raw()
 
         if len(response) < 4:
             print("ERROR: JEDEC transfer returned unexpected length or timed out.")
@@ -244,6 +265,7 @@ class QspiFlash:
         """Executes a Full Chip Erase command (0xC7)."""
         print("Initiating Full Chip Erase... (This may take several seconds)")
         self._init_controller()
+        self._clear_block_protection()
         self._write_enable()
 
         self._transfer(bytes([FlashCmd.CE]), expected_rx_len=0)
@@ -256,6 +278,7 @@ class QspiFlash:
         """Erases a single 64KB Sector (0xD8) at the given offset."""
         print(f"Erasing 64KB Sector at offset 0x{offset:06X}...")
         self._init_controller()
+        self._clear_block_protection()
         self._write_enable()
 
         cmd = bytes([FlashCmd.SE]) + offset.to_bytes(3, 'big')
@@ -263,7 +286,7 @@ class QspiFlash:
         self._wait_ready("Sector Erase")
 
     def write_binary_file(self, filepath: str = DEFAULT_BOOTBLOCK_PATH, start_offset: int = 0) -> None:
-        """Programs a binary file to SPI flash using Page Programming (0x02)."""
+        """Programs a binary file to SPI flash respecting 256-byte Page Boundaries."""
         try:
             with open(filepath, "rb") as f:
                 data = f.read()
@@ -275,58 +298,57 @@ class QspiFlash:
         self._init_controller()
 
         t0 = time.time()
-        for i in range(0, len(data), 128):
-            chunk = data[i:i + 128]
-            current_offset = start_offset + i
+        file_idx = 0
+        total_len = len(data)
+
+        while file_idx < total_len:
+            current_offset = start_offset + file_idx
+            # Calculate remaining room in the current 256-byte page
+            page_offset = current_offset % 256
+            chunk_size = min(256 - page_offset, total_len - file_idx)
+
+            chunk = data[file_idx: file_idx + chunk_size]
 
             self._write_enable()
             cmd = bytes([FlashCmd.PP]) + current_offset.to_bytes(3, 'big') + chunk
             self._transfer(cmd, expected_rx_len=0)
-            self._wait_ready("Page Program")
+            self._wait_ready_fast()
 
-            progress = min(100.0, ((i + len(chunk)) / len(data)) * 100)
+            file_idx += chunk_size
+            progress = (file_idx / total_len) * 100
             print(f" -> Progress: {progress:05.2f}%", end='\r')
 
         print(f"\nSUCCESS: Flashed in {time.time()-t0:.2f}s.")
 
-    def enable_quad_mode(self) -> None:
-        """Enables Quad I/O mode in the flash status register."""
+    def _set_quad_mode(self, enable: bool) -> None:
+        """Sets or clears the Quad-Enable (QE) bit in the flash status registers."""
         self._init_controller()
         status1 = self._read_status(FlashCmd.RDSR)
         status2 = self._read_status(FlashCmd.RDSR2)
 
         self._write_enable()
-        jedec = self._transfer(bytes([FlashCmd.RDID, 0x00, 0x00, 0x00]), expected_rx_len=4)
+        jedec = self._read_jedec_raw()
         manuf_id = jedec[1] if len(jedec) > 1 else None
 
-        new_status1 = status1 | FlashCmd.QE_BIT
-        new_status2 = status2 | FlashCmd.SR2_QE
+        if enable:
+            new_status1 = status1 | FlashCmd.QE_BIT
+            new_status2 = status2 | FlashCmd.SR2_QE
+        else:
+            new_status1 = status1 & ~FlashCmd.QE_BIT
+            new_status2 = status2 & ~FlashCmd.SR2_QE
 
-        if manuf_id == 0x9D:
+        if manuf_id == 0x9D:  # ISSI status register WRSR
             self._transfer(bytes([FlashCmd.WRSR, new_status1]), expected_rx_len=0)
         else:
             self._transfer(bytes([FlashCmd.WRSR, new_status1, new_status2]), expected_rx_len=0)
 
         self._wait_ready("Write Status Register")
-        print("Quad Mode enabled.")
+        print(f"Quad Mode {'enabled' if enable else 'disabled'}.")
+
+    def enable_quad_mode(self) -> None:
+        """Enables Quad I/O mode in the flash status register."""
+        self._set_quad_mode(True)
 
     def disable_quad_mode(self) -> None:
         """Disables Quad I/O mode in the flash status register."""
-        self._init_controller()
-        status1 = self._read_status(FlashCmd.RDSR)
-        status2 = self._read_status(FlashCmd.RDSR2)
-
-        self._write_enable()
-        jedec = self._transfer(bytes([FlashCmd.RDID, 0x00, 0x00, 0x00]), expected_rx_len=4)
-        manuf_id = jedec[1] if len(jedec) > 1 else None
-
-        new_status1 = status1 & ~FlashCmd.QE_BIT
-        new_status2 = status2 & ~FlashCmd.SR2_QE
-
-        if manuf_id == 0x9D:
-            self._transfer(bytes([FlashCmd.WRSR, new_status1]), expected_rx_len=0)
-        else:
-            self._transfer(bytes([FlashCmd.WRSR, new_status1, new_status2]), expected_rx_len=0)
-
-        self._wait_ready("Write Status Register")
-        print("Quad Mode disabled.")
+        self._set_quad_mode(False)

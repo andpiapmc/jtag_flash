@@ -55,15 +55,26 @@ class AhbApRegs:
     CSW_DEFAULT_32BIT = 0x23000012
 
 class QspiConfig:
-    LEG_FLSH            = (1 << 31)  # Enable Legacy SPI Bit-banging
-    BAUD_DIV_32         = (0x4 << 3)
-    MANUAL_START_EN     = (1 << 15)
-    MANUAL_CS_EN        = (1 << 14)
-    PCS_ALL_HIGH        = (0xF << 10)  # 1111: Tutti i CS disattivati (impedisce collisioni su MISO)
-    PCS0_ACTIVE         = (0xE << 10)  # 1110: Solo CS0 attivo
-    MANUAL_START        = (1 << 16)
-    
-    STATUS_RX_NOT_EMPTY = (1 << 4)
+    """
+    QSPI_CONFIG / QSPI_STATUS register bitfield masks (Zynq TRM UG585).
+    MASTER_MODE, MANUAL_CS_EN, and MANUAL_START_EN sit at different bit
+    positions than early Zynq documentation suggests; the values below are
+    the ones verified against working hardware.
+    """
+    MASTER_MODE          = (1 << 0)
+    MANUAL_CS_EN         = (1 << 1)
+    BAUD_DIV_16          = (0x3 << 3)   # SCLK = qspi_ref_clk / 16
+    MANUAL_START_EN      = (1 << 14)
+    MANUAL_START         = (1 << 16)    # Trigger bit: set to start a transfer, clears on completion
+    LEG_FLSH             = (1 << 31)    # Enables the legacy/manual (non-linear) SPI interface
+    PCS_ALL_HIGH         = (0xF << 10)  # All 4 chip-selects de-asserted (avoids MISO bus contention)
+
+    # Base manual-mode config with CS not yet asserted; OR with PCS_ALL_HIGH
+    # for idle, AND-NOT with it to assert CS0, OR with MANUAL_START to trigger.
+    MANUAL_BASE_CFG = LEG_FLSH | MANUAL_START_EN | BAUD_DIV_16 | MANUAL_CS_EN | MASTER_MODE
+
+    STATUS_TX_NOT_FULL   = (1 << 2)
+    STATUS_RX_NOT_EMPTY  = (1 << 4)
 
 class ZynqRegs:
     SLCR_BASE        = 0xF8000000
@@ -75,17 +86,12 @@ class ZynqRegs:
     A9_CPU_RST_CTRL  = SLCR_BASE + 0x244
     APER_CLK_CTRL    = SLCR_BASE + 0x12C
     LQSPI_CLK_CTRL   = SLCR_BASE + 0x14C
-    LQSPI_RST_CTRL   = SLCR_BASE + 0x230
 
     LQSPI_CLK_CTRL_SAFE_VAL = 0x00002821
-    GPIO_CLK_ACT     = 1 << 22
     LQSPI_CLK_ACT    = 1 << 23
 
-    GPIO_BASE        = 0xE000A000
-    GPIO_DATA_0      = GPIO_BASE + 0x040
-    GPIO_DIRM_0      = GPIO_BASE + 0x204
-    GPIO_OEN_0       = GPIO_BASE + 0x208
-    MIO_PIN_MUX_GPIO = 0x00000600
+    MIO_PULLUP_BIT   = 1 << 12   # Enables the MIO pin's internal weak pull-up
+    MIO_PIN_MUX_QSPI = 0x02      # L1_SEL: routes the pin to the QSPI peripheral function
 
     QSPI_BASE        = 0xE000D000
     QSPI_CONFIG      = QSPI_BASE + 0x00

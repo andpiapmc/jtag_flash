@@ -30,15 +30,9 @@ class ZynqSoc:
         self.slcr_lock()
 
     def enable_qspi_ref_clock(self):
-        """Sovrascrive l'intero registro con il valore sano per evitare stalli post-FSBL."""
+        """Overwrites the whole register with the known-good value to prevent post-FSBL stalls."""
         self.slcr_unlock()
         self.dap.write_mem32(ZynqRegs.LQSPI_CLK_CTRL, ZynqRegs.LQSPI_CLK_CTRL_SAFE_VAL)
-        self.slcr_lock()
-
-    def clear_qspi_reset(self):
-        """Assicura che il modulo QSPI sia fuori dal reset."""
-        self.slcr_unlock()
-        self.dap.write_mem32(ZynqRegs.LQSPI_RST_CTRL, 0x00000000)
         self.slcr_lock()
 
     # -------------------------------------------------------------------
