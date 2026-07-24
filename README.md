@@ -11,7 +11,8 @@ It leverages the hardware MPSSE engine of FTDI chips (e.g., FT232H, used in Digi
 - **CoreSight DAP & AHB-AP**: management of the Debug Access Port for the ARM Cortex-A9 cores.
 - **High-Speed Bulk Write Engine**: optimized USB-packetized writes to OCM memory (SRAM).
 - **FSBL Execution**: load and execute a First Stage Boot Loader (`fsbl.bin`) directly over JTAG.
-- **QSPI Flash Diagnostics**: query the JEDEC ID of the attached SPI Flash memory.
+- **QSPI Flash Programming**: read the JEDEC ID, erase the full chip or a single 64KB sector, program a binary at any offset, and toggle Quad I/O mode on the SPI-NOR flash.
+- **Safe CLI Lifecycle**: the FTDI connection is always closed cleanly on exit, including on `Ctrl+C`.
 
 For the full feature breakdown and the module-by-module architecture, see [`docs/architecture.md`](docs/architecture.md) or the hosted site above.
 
@@ -39,7 +40,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-This opens an interactive menu to list FTDI devices, scan the JTAG chain, inject and run `fsbl.bin`, and query the QSPI JEDEC ID. See the [full usage guide](https://andpiapmc.github.io/jtag_flash/#-usage) for the typical workflow and menu reference.
+This opens an interactive menu to list FTDI devices, scan the JTAG chain, inject and run `fsbl.bin`, and read/erase/program the QSPI flash (including Quad I/O mode). See the [full usage guide](https://andpiapmc.github.io/jtag_flash/#-usage) for the typical workflow and menu reference.
 
 ## 📚 Documentation site (local build)
 

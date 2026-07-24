@@ -93,9 +93,12 @@ if __name__ == '__main__':
     jtag_controller = JtagController()
     show_menu()
 
-    while main_loop(jtag_controller):
-        pass
-
-    print("Exiting...")
-    jtag_controller.close()
-    sys.exit(0)
+    try:
+        while main_loop(jtag_controller):
+            pass
+    except KeyboardInterrupt:
+        print("\nAborting manual routine...") # CTRL+C
+    finally:
+        print("Exiting...")
+        jtag_controller.close()
+        sys.exit(0)

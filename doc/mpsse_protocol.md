@@ -123,7 +123,7 @@ Notes:
 
 - For large memory writes (for example, writing an FSBL or bulk RAM loading), the host can pack hundreds or thousands of JTAG transactions into a single Python `bytearray` (or similar) and send it in large USB bulk writes (typical practice: chunk sizes tuned to device/driver limits, e.g., 64 KB chunks).
 - This reduces USB overhead and maximizes the rate at which the FTDI MPSSE can toggle the JTAG pins and accept transactions.
-- In this project the `_write_mem32_bulk()` pattern packs many 32-bit write sequences into large MPSSE command buffers to accelerate AHB-AP writes.
+- In this project the `write_mem32_bulk()` pattern (in `coresight_dap.py`, used by `zynq_soc.py::load_and_run_fsbl()`) packs many 32-bit write sequences into large MPSSE command buffers to accelerate AHB-AP writes - see [FSBL Injection](fsbl_injection.md) for the full picture.
 
 ## Practical considerations and caveats
 

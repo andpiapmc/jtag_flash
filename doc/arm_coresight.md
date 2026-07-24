@@ -102,3 +102,15 @@ Once past the Access Ports, data travels across specific internal buses optimize
 | **Speed/Bandwidth** | High speed (optimized for bulk memory transfers). | Low speed (optimized for single-register control). |
 | **Primary Targets** | On-Chip RAM (OCM), DDR, System Memory. | QSPI Controller, SLCR Registers, Core Debugging. |
 | **Tool Usage** | Used to inject the `fsbl.bin` firmware in fast burst blocks. | Used to configure hardware registers and query the QSPI Flash JEDEC ID. |
+
+---
+
+## 📌 What this tool actually exercises
+
+The table above describes the general CoreSight topology available on Zynq-7000 silicon. This specific tool is deliberately simpler than that:
+
+* **A single Access Port does everything.** `coresight_dap.py` opens one AHB-AP memory window (via `connect()`) and uses it for *all* memory-mapped access - OCM, SLCR, and the QSPI controller alike. There is no separate APB-AP transaction path in the code; the distinction in the table above is architectural background, not a description of this codebase's routing.
+* **FPGA/PL access bypasses the DAP entirely.** `read_fpga_usercode()` doesn't go through the JTAG-AP bridge shown in the diagram above. Instead, it addresses the FPGA's own TAP directly as a second device in the same physical JTAG chain (`tap_index=0`, versus `tap_index=1` for the ARM DAP) - see `jtag_tap.py::shift_ir()` / `shift_dr()`. This is a simpler and more direct path, and it's why FPGA USERCODE reads work even without ever powering up the CoreSight debug domains.
+* **No CoreSight debug-halt/resume is used.** Even CPU control (see [FSBL Injection](fsbl_injection.md)) goes through the SLCR reset line rather than the Cortex-A9's own debug registers.
+
+If you extend this tool to add real per-core debug control (breakpoints, register inspection, single-stepping), that's where you would start using the APB-AP path shown in the table for the first time.
